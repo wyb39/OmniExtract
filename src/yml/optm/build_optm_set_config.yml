@@ -1,0 +1,52 @@
+# Template Configuration for Build Optm Set
+# This config is used for the /api/build_optm_set endpoint
+
+# === REQUIRED PATHS ===
+# Path to the JSON files containing article data. The json filed could be converted using file_to_json function.
+json_path: "path/to/your/json/files"
+
+# Path to the curated dataset file (JSON, CSV, TSV, or Excel format)
+dataset: "path/to/your/curated/dataset.json"
+
+# Path to the directory where the optimized dataset will be saved
+save_dir: "path/to/save/optimized/dataset"
+
+
+# === FIELDS CONFIGURATION ===
+# List of DspyField objects defining the fields to extract
+fields:
+  - name: "field_name"
+    field_type: "str"  # Can be: str, int, float, bool, list, literal, list_literal
+    description: "Description of this field"
+    # Optional fields:
+    # range_min: 0.0
+    # range_max: 100.0
+    # literal_list: ["option1", "option2"]
+
+# Add more fields as needed
+#  - name: "another_field"
+#    field_type: "int"
+#    description: "Another field to extract"
+
+# === EXTRACTION MODE ===
+# Whether to allow extracting multiple entities
+multiple: false
+
+# === ARTICLE CONFIGURATION ===
+#Field name for the article file name to extract
+article_field: "article_field"
+
+# Optional list of article parts to extract from
+# If not specified, the entire article will be used
+article_parts:  # Can be: Introduction, Method, Result, Discussion, Conclusion
+  # - "Introduction"
+  # - "Method"
+  # - "Result"
+
+# === USAGE INSTRUCTIONS ===
+# 1. Replace all placeholder paths with your actual file paths
+# 2. Modify fields to match your data structure
+# 3. Set multiple to true if you need to extract multiple entities
+# 4. Specify article_field with the correct field name in your JSON files
+# 5. Optionally specify article_parts to limit extraction to specific parts of the article
+# 6. Run with: python cli_handler.py build_optm_set path/to/this/config.yml

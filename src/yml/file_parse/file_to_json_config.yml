@@ -1,0 +1,28 @@
+# YAML Configuration for File to JSON Conversion
+# Copy this file and modify according to your needs
+
+# === FILE SOURCE CONFIGURATION ===
+# Define the source folder containing files to be converted
+
+folder_path: "D://PycharmProjects//acurateLLM//data//pdf"  # Path to the folder containing source files
+  
+# === OUTPUT CONFIGURATION ===
+# Define where the converted JSON files will be saved
+save_path: "D://PycharmProjects//acurateLLM//data//json"  # Path to save JSON results
+
+# === FILE TYPE CONFIGURATION ===
+# Specify the type of files to be processed
+# Optional values: 'PDF', 'scienceDirect', 'PMC', 'Arxiv'
+file_type: "PDF"
+
+# === CONVERSION MODE ===
+# Choose the conversion strategy
+# Optional values: 'byPart' (divide the document by article parts), 'wholeDoc' (convert entire document as one)
+convert_mode: "byPart"
+
+# === USAGE INSTRUCTIONS ===
+# 1. Replace folder_path with your actual source folder path
+# 2. Modify save_path to your desired output directory
+# 3. Update file_type according to your source file format
+# 4. Choose appropriate convert_mode based on your requirements
+# 5. The converted JSON files can be used for building datasets for prompt optimization or extraction tasks

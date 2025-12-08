@@ -1,0 +1,17 @@
+# parse_table_to_tsv Configuration File
+# This file is used to configure parameters for table parsing functionality
+
+# Source file folder path
+file_folder_path: "D:/path/to/source/files"  # Replace with the folder path containing source files
+  
+# Result saving folder path
+save_folder_path: "D:/path/to/save/results"  # Replace with the folder path to save parsed TSV results
+  
+# File format configuration Note: the non-tabular file format is not supported well now.
+# Optional values: 'PDF', 'scienceDirect', 'PMC', 'Arxiv', default is None (for PDF)
+non_tabular_file_format: "PDF"
+  
+# Usage Instructions:
+# 1. Set file_folder_path to the folder path containing source files with tables to parse
+# 2. Set save_folder_path to the folder path where parsed TSV files will be saved
+# 3. Set non_tabular_file_format parameter based on source file type, optional values are 'PDF', 'scienceDirect', 'PMC', 'Arxiv'

@@ -1,0 +1,90 @@
+# Advanced Optim Custom Configuration
+# This shows more complex configurations for different extraction scenarios
+
+# Example 1: Multi-field extraction with complex types
+inputFields:
+  - name: "document_text"
+    field_type: "str"
+    description: "Full document text to analyze"
+    original_text: true
+  - name: "document_type"
+    field_type: "literal"
+    literal_list: ["news", "research", "legal", "medical", "technical"]
+    description: "Type of document being processed"
+  - name: "extraction_focus"
+    field_type: "str"
+    description: "Specific focus area for extraction"
+
+outputFields:
+  - name: "key_entities"
+    field_type: "list"
+    description: "List of important entities mentioned in the document"
+  - name: "sentiment_score"
+    field_type: "float"
+    range_min: -1.0
+    range_max: 1.0
+    description: "Overall sentiment score from -1 (negative) to 1 (positive)"
+  - name: "summary"
+    field_type: "str"
+    description: "Brief summary of the document content"
+  - name: "urgency_level"
+    field_type: "literal"
+    literal_list: ["low", "medium", "high", "critical"]
+    description: "Urgency level based on content analysis"
+  - name: "relevant_dates"
+    field_type: "list"
+    description: "Important dates mentioned in the document"
+
+# Example 2: Image-based extraction (requires image input)
+# Uncomment below for image processing scenarios
+# inputFields:
+#   - name: "image"
+#     field_type: "image"
+#     description: "Image to analyze"
+#   - name: "image_context"
+#     field_type: "str"
+#     description: "Context about what to look for in the image"
+
+# outputFields:
+#   - name: "objects_detected"
+#     field_type: "list"
+#     description: "List of objects detected in the image"
+#   - name: "text_content"
+#     field_type: "str"
+#     description: "Any text content extracted from the image"
+
+# Initial prompt for complex extraction
+initial_prompt: |
+  Analyze the provided content and extract structured information according to the specified requirements.
+  
+  Document Type: {document_type}
+  Focus: {extraction_focus}
+  Content: {document_text}
+  
+  Extract the following information:
+  1. All key entities (people, organizations, locations, concepts)
+  2. Overall sentiment (-1 to 1)
+  3. A concise summary
+  4. Urgency assessment
+  5. Any relevant dates
+
+# Dataset configuration
+dataset: "data/advanced_extraction_dataset.csv"
+save_dir: "results/advanced_optim_results"
+
+# Optimization settings
+task: "Extraction"
+optim_burden: "heavy"  # Use heavy for complex extraction tasks
+threads: 8  # Increase threads for faster processing
+demos: 5  # More demos for complex tasks
+
+# Extraction settings
+multiple: true  # Enable multiple output extraction
+recall_prior: true  # Prioritize finding all relevant information
+ai_evaluation: true  # Use AI evaluation for complex scoring
+
+# Advanced configuration notes:
+# - Ensure your dataset has columns matching all input and output field names
+# - For image processing, set up proper image handling in your dataset
+# - Heavy optimization burden will take longer but produce better results
+# - Multiple=true enables extraction of lists and complex structures

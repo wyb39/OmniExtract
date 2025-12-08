@@ -1,0 +1,402 @@
+/* OmniExtract Application Styles */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    background-color: #f5f5f5;
+}
+
+.navbar {
+    background-color: #1976D2; /* Quasar Primary Color */
+    padding: 1rem 2rem;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.nav-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 1600px;
+    margin: 0 auto;
+}
+
+.logo-container {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.logo {
+    height: 50px;
+    width: auto;
+    border-radius: 10px;
+}
+
+.app-title {
+    color: white;
+    font-size: 1.8rem;
+    font-weight: 600;
+    margin: 0;
+}
+
+.nav-links {
+    display: flex;
+    gap: 2rem;
+}
+
+.nav-link {
+    color: white;
+    text-decoration: none;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    transition: all 0.3s ease;
+    font-weight: 500;
+}
+
+.nav-link:hover {
+    background-color: rgba(255,255,255,0.12); /* Quasar Hover Effect */
+    transform: translateY(-1px);
+}
+
+.nav-link.active {
+    color: #FFBF00; /* Amber Color */
+    font-weight: 600;
+}
+
+.page-content {
+    max-width: 1600px;
+    margin: 2rem auto;
+    padding: 0 2rem;
+}
+
+.module-container {
+    background: white;
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    margin-bottom: 2rem;
+}
+
+.module-title {
+    color: #333;
+    font-size: 1.3rem;
+    margin-bottom: 1rem;
+    font-weight: 600;
+}
+
+.section-title {
+    color: #333;
+    font-size: 1.1rem;
+    margin-bottom: 0.8rem;
+    font-weight: 600;
+}
+
+.form-group {
+    margin-bottom: 1rem;
+}
+
+.form-label {
+    display: block;
+    margin-bottom: 0.35rem;
+    color: #555;
+    font-weight: 500;
+    font-size: 0.95rem;
+}
+
+.form-input, .form-select, .form-textarea {
+    width: 100%;
+    padding: 0.6rem 0.75rem;
+    border: 1px solid #e1e5e9;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    transition: border-color 0.3s ease;
+}
+
+.form-input:focus, .form-select:focus, .form-textarea:focus {
+    outline: none;
+    border-color: #1976D2; /* Quasar主色 */
+    box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.2);
+}
+
+.form-textarea {
+    resize: vertical;
+    min-height: 120px;
+}
+
+.btn {
+    background-color: #1976D2; /* Quasar Primary Color */
+    color: white;
+    border: none;
+    padding: 0.65rem 1.5rem;
+    border-radius: 4px; /* Quasar Default Border Radius */
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.btn:hover {
+    background-color: #1565C0; /* Quasar Primary Color Darker Shade */
+    transform: translateY(-1px);
+    box-shadow: 0 4px 15px rgba(25, 118, 210, 0.3);
+}
+
+/* Button Group Styles */
+.button-group {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.chart-container {
+    margin-top: 2rem;
+    background: white;
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+}
+
+.metric-card {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    color: white;
+    padding: 1.5rem;
+    border-radius: 12px;
+    text-align: center;
+    margin-bottom: 1rem;
+}
+
+.metric-value {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+.metric-label {
+    font-size: 0.9rem;
+    opacity: 0.9;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+    margin-top: 1.5rem;
+}
+
+/* Help Text Styles */
+.help-text-container {
+    background-color: #f8f9fa;
+    border-left: 4px solid #1976D2; /* Quasar Primary Color */
+    padding: 1rem 1.5rem;
+    border-radius: 0 4px 4px 0;
+    margin-top: 1rem;
+}
+
+/* Limited Width Form Elements */
+.form-input-limited,
+.form-select-limited {
+    max-width: 400px;
+}
+
+/* Form Help Text */
+.form-help {
+    color: #666;
+    font-size: 0.85rem;
+    margin-top: 0.5rem;
+    font-style: italic;
+}
+
+
+.form-hint {
+    display: block;
+    color: #666;
+    font-size: 0.8rem;
+    margin-top: 0.25rem;
+    font-style: italic;
+}
+.help-text-title {
+    color: #333;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    font-size: 1rem;
+}
+
+.help-text-list {
+    list-style-type: none;
+    padding-left: 0;
+}
+
+.help-text-list li {
+    color: #555;
+    margin-bottom: 0.3rem;
+    font-size: 0.95rem;
+    padding-left: 1rem;
+    position: relative;
+}
+
+.help-text-list li:before {
+    content: "•";
+    color: #1976D2; /* Quasar Primary Color */
+    font-weight: bold;
+    position: absolute;
+    left: 0;
+}
+
+/* Model Settings Tabs styles */
+.model-settings-tabs {
+    margin-top: 1rem;
+}
+
+.model-settings-tabs .tab {
+    padding: 0.75rem 1.5rem;
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-bottom: none;
+    border-radius: 0.5rem 0.5rem 0 0;
+    cursor: pointer;
+    margin-right: 0.25rem;
+}
+
+.model-settings-tabs .tab--selected {
+    background-color: #ffffff;
+    font-weight: 600;
+    border-color: #1976D2; /* Quasar Primary Color */
+    border-bottom: 2px solid #ffffff;
+}
+
+/* Config Card styles */
+.config-card {
+    background-color: #ffffff;
+    border: 1px solid #dee2e6;
+    border-radius: 0.5rem;
+    padding: 1.5rem;
+    margin-top: 1rem;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.config-card-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #2c3e50;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.config-items {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.config-item-pair {
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.config-item {
+    flex: 1;
+    min-width: 200px;
+    display: flex;
+    justify-content: space-between;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #f8f9fa;
+}
+
+.config-item:last-child {
+    border-bottom: none;
+}
+
+.config-item-key {
+    font-weight: 500;
+    color: #495057;
+}
+
+.config-item-value {
+    color: #6c757d;
+    font-family: monospace;
+}
+
+.no-config-message {
+    padding: 2rem;
+    text-align: center;
+    color: #6c757d;
+    background-color: #f8f9fa;
+    border-radius: 0.5rem;
+    margin-top: 1rem;
+}
+
+/* Tab Styles */
+.custom-tabs {
+    margin-bottom: 1rem;
+}
+
+.custom-tab {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-bottom: none;
+    border-radius: 0.4rem 0.4rem 0 0;
+    padding: 0.5rem 1.5rem;
+    cursor: pointer;
+    margin-right: 0.25rem;
+    color: #495057;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    font-size: 0.9rem;
+    min-height: 2rem;
+    line-height: 1.2;
+    max-width: 200px;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.custom-tab:hover {
+    background-color: #e9ecef;
+}
+
+.custom-tab--selected {
+    background-color: #1976D2; /* Quasar Primary Color */
+    color: white;
+    border-color: #1976D2; /* Quasar Primary Color */
+    font-weight: 600;
+}
+
+.tab-content {
+    padding: 1rem 0;
+}
+
+/* Task Card Styles */
+.task-card-container {
+    margin-top: 1rem;
+}
+
+.task-card {
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    transition: all 0.3s ease;
+    margin-bottom: 1rem;
+}
+
+.task-card:hover {
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    transform: translateY(-2px);
+}
+
+.task-card .card-header {
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+    padding: 0.75rem 1rem;
+}
+
+.task-card .card-body {
+    padding: 1rem;
+}

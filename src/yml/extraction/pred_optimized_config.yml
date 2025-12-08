@@ -1,0 +1,29 @@
+# YAML Configuration for Extraction tasks with optimization
+# Copy this file and modify according to your needs
+
+# === REQUIRED PATHS ===
+# Directory containing the optimized settings and prompts from previous optimization
+load_dir: "/data/tangbx/extraction/nc/optim_results"  # Path to optimization results directory
+
+# Dataset to run predictions on
+dataset: "/data/tangbx/extraction/nc/test_dataset.json"  # Path to the dataset file (JSON, CSV, TSV, or Excel format)
+
+# Directory where prediction results will be saved
+save_dir: "/data/tangbx/extraction/nc/pred_optimized_results"  
+
+# === EVALUATION SETTINGS ===
+# Evaluation mode: "confidence" (evaluate prediction confidence), "score" (evaluate prediction quality), or "" for no judgement
+judging: ""
+
+# === OUTPUT CONFIGURATION ===
+# Output file name for the prediction results
+output_file: "result.json"
+
+# === USAGE INSTRUCTIONS ===
+# 1. Ensure load_dir contains the optimization results:
+#    - optim_settings.json (optimized PredictionSettings)
+#    - optim_prompt.json (optimized prompts)
+# 2. Replace dataset path with your actual dataset file path
+# 3. Modify save_dir to your desired output directory
+# 4. The endpoint will load optimized settings and prompts from load_dir
+# 5. Predictions will be run on your dataset with the optimized configuration

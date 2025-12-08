@@ -1,0 +1,51 @@
+# YAML Configuration for Extraction tasks without optimization
+# Copy this file and modify according to your needs
+
+# === INPUT FIELDS ===
+# Define what data your model will receive as input
+inputFields:
+  - name: "Method"
+    field_type: "str"  # Can be: str, int, float, bool, list, literal, image
+    description: "The method section of a Nature Communications journal article"
+
+# Add more input fields as needed
+# - name: "additional_input"
+#   field_type: "str"
+#   description: "Another input field"
+
+# === OUTPUT FIELDS ===
+# Define what your model should extract or generate from the input
+outputFields:
+  - name: "public_datasets"
+    field_type: "list"  # List of public dataset identifiers
+    description: "Public datasets mentioned in the literature"
+  - name: "non_public_datasets"
+    field_type: "list"  # List of non-public dataset identifiers
+    description: "Non-public datasets mentioned in the literature"
+  - name: "databases"
+    field_type: "list"  # List of database names/links
+    description: "Database links mentioned in the literature"
+
+
+# === PROMPT CONFIGURATION ===
+initial_prompt: |
+  You are a data analyst organizing the data usage in literature published in the journal Nature Communications. Your goals are: 1. Extract the identifiers of all public datasets mentioned in the literature 2. Extract the identifiers of all non-public datasets (i.e., self-created datasets) provided in the literature 3. Extract the names of all databases used in the literature. Please carefully read the methods section of the literature to completely and accurately extract the above information.
+
+# === DATA AND SAVE CONFIGURATION ===
+dataset: "/data/tangbx/extraction/nc/test_dataset.json"  # Path to the dataset file (JSON, CSV, TSV, or Excel format)
+save_dir: "/data/tangbx/extraction/nc/test_pred"  # Directory where prediction results will be saved
+
+# === EVALUATION SETTINGS ===
+judging: ""  # Evaluation mode: "confidence" (evaluate prediction confidence) or "score" (evaluate with 0-5 scores); "" for no judgement
+
+# === PROCESSING SETTINGS ===
+task: "Extraction"  # Task type: QA (question answering) or Extraction (information extraction, default)
+threads: 6  # Number of parallel threads for processing
+multiple: false  # Whether to extract multiple entities per input (list output) or single entity
+
+# === USAGE INSTRUCTIONS ===
+# 1. Replace dataset path with your actual dataset file path
+# 2. Modify save_dir to your desired output directory
+# 3. Update inputFields and outputFields to match your data structure
+# 4. Ensure your dataset has columns matching all field names
+# 5. Adjust threads based on your system's capabilities

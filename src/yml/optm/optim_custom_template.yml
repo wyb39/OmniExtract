@@ -1,0 +1,52 @@
+# Template Configuration for Optim Custom
+# Copy this file and modify according to your needs
+
+# === INPUT FIELDS ===
+# Define what data your model will receive
+inputFields:
+  - name: "input_text"
+    field_type: "str"  # Can be: str, int, float, bool, list, literal, image
+    description: "Description of this input field"
+    original_text: false  # Set true to preserve original formatting
+
+# Add more input fields as needed
+# - name: "additional_input"
+#   field_type: "str"
+#   description: "Another input field"
+
+# === OUTPUT FIELDS ===
+# Define what your model should extract or generate
+outputFields:
+  - name: "extracted_value"
+    field_type: "str"
+    description: "Description of what to extract"
+
+# === PROMPT CONFIGURATION ===
+initial_prompt: |
+  Write your initial prompt template here.
+  Use {field_name} placeholders for input fields.
+  
+  Example: Given the text: {input_text}
+  Extract the following information...
+
+# === DATA AND SAVE CONFIGURATION ===
+dataset: "path/to/your/dataset.csv"  # Must have columns matching input/output field names
+save_dir: "path/to/save/results"
+
+# === OPTIMIZATION SETTINGS ===
+task: "Extraction"  # Options: QA, Extraction
+optim_burden: "medium"  # Options: light, medium, heavy
+threads: 6  # Number of parallel threads
+demos: 1  # Number of few-shot examples to use
+
+# === EXTRACTION MODE ===
+multiple: false  # Set true for extracting multiple entities, false for single entity
+recall_prior: false  # Set true to prioritize finding all matches
+ai_evaluation: false  # Set true to use AI scoring instead of string matching
+
+# === USAGE INSTRUCTIONS ===
+# 1. Replace all placeholder paths with your actual file paths
+# 2. Modify inputFields and outputFields to match your data structure
+# 3. Update initial_prompt with your specific task instructions
+# 4. Ensure your dataset CSV has columns matching all field names
+# 5. Run with: python cli_handler.py optim_custom path/to/this/config.yml

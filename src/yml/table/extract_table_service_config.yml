@@ -1,0 +1,41 @@
+# extract_table_service Configuration File
+# This file is used to configure parameters for table extraction service functionality
+
+# Parsed file path
+parsed_file_path: "D:/path/to/parsed/files"  # Replace with the folder path containing parsed files
+  
+# Result saving folder path
+save_folder_path: "D:/path/to/save/results"  # Replace with the folder path to save extracted table results
+  
+# Output fields configuration (list of field names)
+# === OUTPUT FIELDS ===
+# Define what your model should extract or generate from the input
+outputFields:
+  - name: "public_datasets"
+    field_type: "list"  # List of public dataset identifiers
+    description: "Public datasets mentioned in the literature"
+  - name: "non_public_datasets"
+    field_type: "list"  # List of non-public dataset identifiers
+    description: "Non-public datasets mentioned in the literature"
+  - name: "databases"
+    field_type: "list"  # List of database names/links
+    description: "Database links mentioned in the literature"
+
+  
+# Classification prompt
+classify_prompt: "Please classify the table content"
+  
+# Extraction prompt
+extract_prompt: "Please extract the data according to the specified fields"
+  
+# Number of threads to use for processing, default is 6
+num_threads: 6
+  
+# Usage Instructions:
+# 1. Set parsed_file_path to the folder path containing parsed files
+# 2. Set save_folder_path to the folder path where extracted tables will be saved
+# 3. Configure outputFields with the list of fields you want to extract
+# 4. Set appropriate prompts for classification and extraction
+# 5. If you want to extract directly without classification, set extract_directly to true
+# 6. Adjust num_threads according to your system capabilities
+# 7. If file encoding is not utf-8, you can modify the encoding parameter

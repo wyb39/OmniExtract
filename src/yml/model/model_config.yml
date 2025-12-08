@@ -1,0 +1,62 @@
+# Model Configuration Template
+# Copy this file and modify according to your needs
+# This file contains the configuration for ModelSettings class as defined in src/model.py
+
+# === MODEL IDENTIFICATION ===
+# Define the model name and provider type
+model_name: "o4-mini-high"  # Model name identifier (string)
+model_type: "openai"  # Model provider type
+# Valid values: openai, vllm, ollama, qwen, deepseek, gemini, anthropic, openrouter, sglang, custom
+# custom: for openai compatible models
+
+# === API CONFIGURATION ===
+# Configure API endpoint and authentication
+api_base: ""  # API base URL (string)
+# Default URLs for different providers:
+# - openai: https://api.openai.com/v1
+# - vllm: http://localhost:8000
+# - ollama: http://localhost:11434
+# - qwen: https://dashscope.aliyuncs.com/compatible-mode/v1
+# - deepseek: https://api.deepseek.com
+# - gemini: https://generativelanguage.googleapis.com/v1beta
+# - openrouter: https://openrouter.ai/api/v1
+# - anthropic: https://api.anthropic.com
+# - sglang: http://localhost:30000
+# - custom: [User provided URL]
+
+api_key: YOUR-API-KEY  # API key for authentication (string or null)
+
+# === MODEL USAGE CONFIGURATION ===
+# Define how the model will be used in the system
+model_usage: "main"  # Model usage type
+# Valid values: main, prompt_generation, judge, coder
+# - main: Primary model for general tasks
+# - prompt_generation: Model for generating prompts
+# - judge: Model for evaluation and scoring
+# - coder: Model for code generation and programming tasks(for table extraction)
+
+# === SAMPLING PARAMETERS ===
+# Control model output behavior and randomness
+temperature: 0.0  # Temperature for model output randomness (float)
+# Range: 0.0 to 2.0, lower values make output more deterministic
+
+max_tokens: 8000  # Maximum tokens for model response (integer or null)
+# Set to null for no limit, or specify a positive integer
+
+# === SAMPLING for local models ===
+top_p: null  # Top-p sampling parameter (float between 0.0 and 1.0, or null)
+# Alternative to temperature, controls diversity via nucleus sampling
+
+top_k: null  # Top-k sampling parameter (positive integer or null)
+# Controls diversity by considering only the top k tokens
+
+min_p: null  # Minimum probability threshold (float between 0.0 and 1.0, or null)
+# Minimum probability for a token to be considered
+
+# === USAGE INSTRUCTIONS ===
+# 1. Update model_name to your desired model
+# 2. Set model_type according to your provider
+# 3. Configure api_base with your endpoint URL
+# 4. Set api_key (use null for local models without authentication)
+# 5. Choose appropriate model_usage based on your use case
+# 6. Adjust sampling parameters as needed for your task
