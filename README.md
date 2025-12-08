@@ -28,7 +28,7 @@ You can extract multi-property entities from multiple files by following these s
 ## Quick Start
 
 ### Prerequisites
-- Python 3.8 or higher
+- Python 3.10 or higher
 - Git
 
 ### Download the code
