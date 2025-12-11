@@ -5,7 +5,7 @@ Provides a unified interface to configure and manage different types of language
 """
 
 from dsp import Any
-from pydantic import BaseModel
+from pydantic import BaseModel, PrivateAttr
 from typing import Literal
 import baseUtil
 import os
@@ -42,6 +42,7 @@ class ModelSettings(BaseModel):
     top_k: int | None = None
     min_p: float | None = None
     setting_status: bool = False
+    _lm: Any | None = PrivateAttr(default=None)
 
     def save_model_settings(self):
         try:
@@ -75,6 +76,7 @@ class ModelSettings(BaseModel):
                 "w",
             ) as f:
                 f.write(settings_without_api_key.model_dump_json())
+            self._lm = None
             
             return save_message
         except (IOError, OSError) as e:
@@ -138,7 +140,8 @@ class ModelSettings(BaseModel):
 
     def configure_model(self) -> dspy.LM:
         """create DSPy LM from settings"""
-
+        if self._lm is not None:
+            return self._lm
         # Model configuration mapping
         model_configs = {
             "ollama": {
@@ -271,6 +274,7 @@ class ModelSettings(BaseModel):
             logger.info(
                 f"Success to create model configure: {self.model_name} ({self.model_type})"
             )
+            self._lm = llm
             return llm
         except Exception as e:
             logger.error(f"Failed to create model configure: {e}")
@@ -310,4 +314,3 @@ model_setting_instance_image = get_model_settings("visual", include_api_key=True
 model_setting_instance_prompt = get_model_settings("prompt_generation", include_api_key=True)
 model_setting_instance_judge = get_model_settings("judge", include_api_key=True)
 model_setting_instance_coder = get_model_settings("coder", include_api_key=True)
-

@@ -13,6 +13,7 @@ from typing import Literal, List, Any
 import textdistance as tds
 import copy
 import ast
+from model import model_setting_instance, model_setting_instance_judge
 
 
 class DspyField(BaseModel):
@@ -265,7 +266,21 @@ def ai_evaluate(exam, pred, optim_settings):
             )
 
         judge = dspy.ChainOfThought(_ai_evaluation_signature_1)
-        score = judge(extracted_information=pred, reference_information=exam).score
+        try:
+            llm = (
+                model_setting_instance_judge.configure_model()
+                if getattr(model_setting_instance_judge, "setting_status", False)
+                else model_setting_instance.configure_model()
+            )
+        except Exception as e:
+            logger.error(f"Failed to configure judge llm: {e}")
+            llm = None
+
+        score = judge(
+            extracted_information=pred,
+            reference_information=exam,
+            lm=llm,
+        ).score
         return score
     else:
 
@@ -282,7 +297,21 @@ def ai_evaluate(exam, pred, optim_settings):
             )
 
         judge = dspy.ChainOfThought(_ai_evaluation_signature)
-        score = judge(extracted_information=pred, reference_information=exam).score
+        try:
+            llm = (
+                model_setting_instance_judge.configure_model()
+                if getattr(model_setting_instance_judge, "setting_status", False)
+                else model_setting_instance.configure_model()
+            )
+        except Exception as e:
+            logger.error(f"Failed to configure judge llm: {e}")
+            llm = None
+
+        score = judge(
+            extracted_information=pred,
+            reference_information=exam,
+            lm=llm,
+        ).score
         return score
 
 

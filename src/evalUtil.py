@@ -12,6 +12,7 @@ from loguru import logger
 from pydantic import BaseModel
 
 from optimUtil import wrapOneDspyField, DspyField, create_output_model_class
+from model import model_setting_instance, model_setting_instance_judge
 from dspy.utils.parallelizer import ParallelExecutor
 
 
@@ -212,7 +213,16 @@ def custom_judge_metric(
 
     def process_item(example):
         try:
-            return judge(**example.inputs())
+            try:
+                llm = (
+                    model_setting_instance_judge.configure_model()
+                    if getattr(model_setting_instance_judge, "setting_status", False)
+                    else model_setting_instance.configure_model()
+                )
+            except Exception as e:
+                logger.error(f"Failed to configure judge llm: {e}")
+                llm = None
+            return judge(lm=llm, **example.inputs())
         except Exception as e:
             logger.error(f"Error judging example: {e}")
             raise
