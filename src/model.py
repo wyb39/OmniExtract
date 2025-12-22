@@ -78,6 +78,26 @@ class ModelSettings(BaseModel):
                 f.write(settings_without_api_key.model_dump_json())
             self._lm = None
             
+            # Reload the corresponding global model instance
+            usage_to_var = {
+                "main": "model_setting_instance",
+                "visual": "model_setting_instance_image",
+                "prompt_generation": "model_setting_instance_prompt",
+                "judge": "model_setting_instance_judge",
+                "coder": "model_setting_instance_coder",
+            }
+            
+            if self.model_usage in usage_to_var:
+                var_name = usage_to_var[self.model_usage]
+                if var_name in globals():
+                    global_instance = globals()[var_name]
+                    if self is not global_instance:
+                        new_settings = ModelSettings.load_model_settings(self.model_usage)
+                        for field in new_settings.model_fields:
+                            setattr(global_instance, field, getattr(new_settings, field))
+                        global_instance._lm = None
+                        logger.info(f"Reloaded global model instance: {var_name}")
+            
             return save_message
         except (IOError, OSError) as e:
             logger.error(f"Error saving model settings: {e}")

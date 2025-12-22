@@ -5,7 +5,7 @@ import os
 import shutil
 import pandas as pd
 from loguru import logger
-from model import get_model_settings
+from model import get_model_settings, model_setting_instance, model_setting_instance_coder
 from dspy.utils.parallelizer import ParallelExecutor
 from optimUtil import create_output_model_class, DspyField
 from typing import List
@@ -471,7 +471,20 @@ def generate_format_tables(
                 )
 
         def process_item(example):
-            return tableReactor(**example.inputs())
+            try:
+                try:
+                    llm = (
+                        model_setting_instance_coder.configure_model()
+                        if getattr(model_setting_instance_coder, "setting_status", False)
+                        else model_setting_instance.configure_model()
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to configure coder llm: {e}")
+                    llm = None
+                return tableReactor(lm=llm, **example.inputs())
+            except Exception as e:
+                logger.error(f"Error processing example: {e}")
+                raise
 
         executor = ParallelExecutor(
             num_threads=num_threads,
@@ -729,7 +742,20 @@ def generate_format_tables_with_extract4correct(
             return
 
         def process_item(example):
-            return tableReactor(**example.inputs())
+            try:
+                try:
+                    llm = (
+                        model_setting_instance_coder.configure_model()
+                        if getattr(model_setting_instance_coder, "setting_status", False)
+                        else model_setting_instance.configure_model()
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to configure coder llm: {e}")
+                    llm = None
+                return tableReactor(lm=llm, **example.inputs())
+            except Exception as e:
+                logger.error(f"Error processing example: {e}")
+                raise
 
         executor = ParallelExecutor(
             num_threads=num_threads,

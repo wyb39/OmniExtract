@@ -101,8 +101,17 @@ import callbacks
 
 # Run application
 if __name__ == "__main__":
-    # Cancel all running tasks before starting the service
     from call_cli import cancel_all_running_tasks
     cancelled_count = cancel_all_running_tasks()
-    
-    app.run(debug=True, host=os.environ.get("HOST", "127.0.0.1"), port=os.environ.get("PORT", "8050"))
+    host = os.environ.get("HOST", "0.0.0.0")
+    port = int(os.environ.get("PORT", "8050"))
+    use_prod = True
+    if use_prod:
+        try:
+            from waitress import serve
+            serve(server, host=host, port=port)
+        except Exception:
+            print("failed to use production")
+            app.run(debug=False, host=host, port=port)
+    else:
+        app.run(debug=True, host=host, port=port)

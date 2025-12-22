@@ -66,10 +66,7 @@ def judgeFactory(
         if judging == "confidence":
             return wrapConfidenceJudge(prediction_settings)
         elif judging == "score":
-            logger.warning(
-                "Score judge not implemented, falling back to confidence judge"
-            )
-            return wrapConfidenceJudge(prediction_settings)
+            return wrapScoreJudge(prediction_settings)
         else:
             raise ValueError(f"Invalid judging mode: {judging}")
     except ValueError:
@@ -142,9 +139,9 @@ def wrapConfidenceJudge(prediction_settings: PredictionSettings) -> dspy.ChainOf
 
         if prediction_settings.task == "QA":
             be = "are" if len(output_names) > 1 else "is"
-            doc = f"As an objective and impartial judge, please judge if {output_names} {be} factually correct based on the {input_names}"
+            doc = f"As an objective and impartial judge, please evaluate whether the {output_names} {be} factually correct and consistent with the information in {input_names}."
         else:
-            doc = f"As an objective and impartial judge, please judge the accuracy of the {output_names} extracted from the {input_names}"
+            doc = f"As an objective and impartial judge, please evaluate the accuracy and faithfulness of the {output_names} extracted from the {input_names}."
 
         judge_signature = dspy.make_signature(fields, doc, "judge_Signature")
         logger.debug(f"Created judge signature with fields: {list(fields.keys())}")
@@ -156,6 +153,85 @@ def wrapConfidenceJudge(prediction_settings: PredictionSettings) -> dspy.ChainOf
     except Exception as e:
         logger.error(f"Failed to create confidence judge: {e}")
         raise RuntimeError(f"Confidence judge creation failed: {e}") from e
+
+
+def wrapScoreJudge(prediction_settings: PredictionSettings) -> dspy.ChainOfThought:
+    """Wrap prediction settings into score evaluator
+
+    Args:
+        prediction_settings: Prediction settings
+
+    Returns:
+        dspy.ChainOfThought: Score evaluator
+
+    Raises:
+        ValueError: When input parameters are invalid
+        RuntimeError: When evaluator creation fails
+    """
+    try:
+        if not prediction_settings.inputFields:
+            raise ValueError("inputFields cannot be empty")
+        if not prediction_settings.outputFields:
+            raise ValueError("outputFields cannot be empty")
+
+        fields = {}
+        for field in prediction_settings.inputFields:
+            fields[field.name] = wrapOneDspyField(field, True)
+
+        if prediction_settings.multiple:
+            output_class = create_output_model_class(prediction_settings.outputFields)
+            fields["extracted_information"] = (
+                List[output_class],
+                dspy.InputField(description="extracted_information"),
+            )
+        else:
+            for field in prediction_settings.outputFields:
+                fields[field.name] = wrapOneDspyField(field, True)
+
+        if prediction_settings.task == "QA":
+            fields["question"] = wrapOneDspyField(
+                DspyField(
+                    name="question",
+                    field_type="str",
+                    description=prediction_settings.initial_prompt,
+                ),
+                True,
+            )
+
+        fields["score"] = wrapOneDspyField(
+            DspyField(
+                name="score",
+                field_type="int",
+                range_min=1,
+                range_max=10,
+                description="score between 1 and 10",
+            ),
+            False,
+        )
+
+        input_names = ", ".join(
+            [f"[{item.name}]" for item in prediction_settings.inputFields]
+        )
+        output_names = ", ".join(
+            [f"[{item.name}]" for item in prediction_settings.outputFields]
+        )
+
+        if prediction_settings.task == "QA":
+            be = "are" if len(output_names) > 1 else "is"
+            doc = f"As an objective and impartial judge, please evaluate whether the {output_names} {be} factually correct and consistent with the information in {input_names}. Give a score from 1 to 10."
+        else:
+            doc = f"As an objective and impartial judge, please evaluate the accuracy and faithfulness of the {output_names} extracted from the {input_names}. Give a score from 1 to 10."
+
+        judge_signature = dspy.make_signature(fields, doc, "judge_Signature")
+        logger.debug(f"Created judge signature with fields: {list(fields.keys())}")
+        return dspy.ChainOfThought(judge_signature)
+
+    except ValueError as e:
+        logger.error(f"Invalid parameters for score judge: {e}")
+        raise
+    except Exception as e:
+        logger.error(f"Failed to create score judge: {e}")
+        raise RuntimeError(f"Score judge creation failed: {e}") from e
 
 
 def custom_judge_metric(
@@ -276,14 +352,23 @@ def custom_judge_metric(
         try:
             result_dict = example.toDict()
             if result is not None:
-                result_dict["confidence"] = getattr(result, "confidence", None)
+                if prediction_settings.judging == "score":
+                    result_dict["score"] = getattr(result, "score", None)
+                else:
+                    result_dict["confidence"] = getattr(result, "confidence", None)
             else:
-                result_dict["confidence"] = None
+                if prediction_settings.judging == "score":
+                    result_dict["score"] = None
+                else:
+                    result_dict["confidence"] = None
             list_out.append(result_dict)
         except Exception as e:
             logger.error(f"Error processing result for row {index}: {e}")
             result_dict = example.toDict()
-            result_dict["confidence"] = None
+            if prediction_settings.judging == "score":
+                result_dict["score"] = None
+            else:
+                result_dict["confidence"] = None
             list_out.append(result_dict)
 
     df_out = pd.DataFrame(list_out)

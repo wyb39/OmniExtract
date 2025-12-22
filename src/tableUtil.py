@@ -15,6 +15,7 @@ import re
 from pylatexenc.latex2text import LatexNodes2Text
 from articleUtil import ScienceDirectXmlParser, PubMedCentralXmlParser
 import chardet
+import json
 
 
 def detect_encoding(file_path):
@@ -1187,3 +1188,146 @@ def parse_file_for_table_extraction_science_direct(
             )
 
     return err_files
+
+
+def extract_tsv_content_to_json(
+    directory_path,
+    encoding="utf-8",
+    processing_mode: Literal["classify", "example"] = "classify",
+    save_path: str = None,
+):
+    """
+    Read all TSV files in a directory, extract content based on processing_mode,
+    read the corresponding .meta file (if it exists, otherwise empty string),
+    and save the content to a JSON file in a 'json' subdirectory.
+    Format: {"table_content": "xxxxx", "table_meta": "xxxx"}
+
+    Args:
+        directory_path (str): The directory containing the TSV files.
+        encoding (str): Encoding to use for reading files. Default is 'utf-8'.
+        processing_mode (str): Mode for processing table content.
+                               'classify': Extract first 10 and last 10 rows if > 20 rows.
+                               'example': Extract first 10 rows if > 10 rows.
+        save_path (str): Directory to save the JSON files. If None, defaults to 'json' subdirectory.
+    """
+    if not os.path.exists(directory_path):
+        logger.error(f"Directory not found: {directory_path}")
+        return
+
+    if save_path:
+        json_dir = save_path
+    else:
+        json_dir = os.path.join(directory_path, "json")
+    try:
+        os.makedirs(json_dir, exist_ok=True)
+    except OSError as e:
+        logger.error(f"Failed to create directory {json_dir}: {e}")
+        return
+
+    for filename in os.listdir(directory_path):
+        if filename.lower().endswith(".tsv"):
+            tsv_path = os.path.join(directory_path, filename)
+            # Assuming meta file has the same base name but .meta extension
+            # If tsv is "file.tsv", meta is "file.meta"
+            meta_path = os.path.splitext(tsv_path)[0] + ".meta"
+
+            # Read TSV content
+            table_content = ""
+            try:
+                tsv_encoding = detect_encoding(tsv_path)
+                file_df = pd.read_csv(
+                    tsv_path,
+                    sep="\t",
+                    encoding=tsv_encoding,
+                    header=None,
+                )
+                
+                if processing_mode == "classify":
+                    if len(file_df) > 20:
+                        for index, row in file_df[0:10].iterrows():
+                            row_values = [
+                                str(value) if not pd.isnull(value) else " "
+                                for value in row.values
+                            ]
+                            table_content += "\t".join(row_values) + "\n"
+                        for index, row in file_df[-10:-1].iterrows():
+                            row_values = [
+                                str(value) if not pd.isnull(value) else " "
+                                for value in row.values
+                            ]
+                            table_content += "\t".join(row_values) + "\n"
+                    else:
+                        for index, row in file_df.iterrows():
+                            row_values = [
+                                str(value) if not pd.isnull(value) else " "
+                                for value in row.values
+                            ]
+                            table_content += "\t".join(row_values) + "\n"
+                elif processing_mode == "example":
+                    if len(file_df) > 10:
+                        for index, row in file_df[0:10].iterrows():
+                            row_values = [
+                                str(value) if not pd.isnull(value) else " "
+                                for value in row.values
+                            ]
+                            table_content += "\t".join(row_values) + "\n"
+                    else:
+                        for index, row in file_df.iterrows():
+                            row_values = [
+                                str(value) if not pd.isnull(value) else " "
+                                for value in row.values
+                            ]
+                            table_content += "\t".join(row_values) + "\n"
+                else:
+                     logger.warning(f"Unsupported processing mode: {processing_mode}. Using 'classify' mode default.")
+                     if len(file_df) > 20:
+                        for index, row in file_df[0:10].iterrows():
+                            row_values = [
+                                str(value) if not pd.isnull(value) else " "
+                                for value in row.values
+                            ]
+                            table_content += "\t".join(row_values) + "\n"
+                        for index, row in file_df[-10:-1].iterrows():
+                            row_values = [
+                                str(value) if not pd.isnull(value) else " "
+                                for value in row.values
+                            ]
+                            table_content += "\t".join(row_values) + "\n"
+                     else:
+                        for index, row in file_df.iterrows():
+                            row_values = [
+                                str(value) if not pd.isnull(value) else " "
+                                for value in row.values
+                            ]
+                            table_content += "\t".join(row_values) + "\n"
+
+            except Exception as e:
+                logger.error(f"Error reading TSV file {tsv_path}: {e}")
+                continue
+
+            # Read Meta content
+            table_meta = ""
+            if os.path.exists(meta_path):
+                try:
+                    meta_encoding = detect_encoding(meta_path)
+                    with open(meta_path, "r", encoding=meta_encoding) as f:
+                        table_meta = f.read()
+                except Exception as e:
+                    logger.warning(f"Error reading meta file {meta_path}: {e}")
+            
+            # Create JSON object
+            data = {
+                "table_content": table_content,
+                "table_meta": table_meta
+            }
+            
+            # Save to JSON file
+            # Filename for json: "file.tsv" -> "file.json"
+            json_filename = os.path.splitext(filename)[0] + ".json"
+            json_path = os.path.join(json_dir, json_filename)
+            
+            try:
+                with open(json_path, "w", encoding=encoding) as f:
+                    json.dump(data, f, ensure_ascii=False, indent=4)
+            except Exception as e:
+                logger.error(f"Error writing JSON file {json_path}: {e}")

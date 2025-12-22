@@ -111,6 +111,26 @@ def table_parsing_layout():
 
                                     # === ACTION BUTTONS ===
                                     html.Div([
+                                    html.Div([
+                                        html.H5("Output Structure Information", style={"fontSize": "15px", "fontWeight": "600", "marginBottom": "8px", "color": "#1f2937"}),
+                                        html.P([
+                                            "The parsed results include ", html.Code("json_classify", style={"backgroundColor": "#e5e7eb", "padding": "2px 4px", "borderRadius": "4px"}), " and ", html.Code("json_example", style={"backgroundColor": "#e5e7eb", "padding": "2px 4px", "borderRadius": "4px"}), " directories:"
+                                        ], style={"marginBottom": "8px", "fontSize": "14px", "color": "#4b5563"}),
+                                        html.Ul([
+                                            html.Li(["json_classify: Contains the first and last 10 rows of each table (including headers)."]),
+                                            html.Li(["json_example: Contains the first 10 rows of each table (including headers)."])
+                                        ], style={"marginBottom": "8px", "fontSize": "14px", "color": "#4b5563", "paddingLeft": "20px"}),
+                                        html.P([
+                                            "You can use the ", html.Strong("Build Optimization Dataset"), " module to optimize prompts for table extraction."
+                                        ], style={"marginBottom": "0", "fontSize": "14px", "color": "#4b5563"})
+                                    ], style={
+                                        "backgroundColor": "#f8fafc",
+                                        "border": "1px solid #e2e8f0", 
+                                        "borderLeft": "4px solid #3b82f6",
+                                        "borderRadius": "6px",
+                                        "padding": "16px",
+                                        "marginBottom": "20px"
+                                    }),
                                         html.Button(
                                             "Start Table Parsing",
                                             id="start-table-parsing",

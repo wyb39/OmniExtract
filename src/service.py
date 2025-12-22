@@ -384,19 +384,21 @@ def parse_table_to_tsv(
         parse_file_for_table_extraction_tex,
         parse_file_for_table_extraction_pmc,
         parse_file_for_table_extraction_science_direct,
+        extract_tsv_content_to_json,
     )
 
+    err_files = []
     # Determine which parser to use based on file format
     if non_tabular_file_format is None or non_tabular_file_format.lower() == "pdf":
         # Use PDF parser
-        return parse_file_for_table_extraction_pdf(
+        err_files = parse_file_for_table_extraction_pdf(
             file_folder_path=file_folder_path,
             save_folder_path=save_folder_path,
             encoding=encoding,
         )
     elif non_tabular_file_format.lower() == "sciencedirect":
         # Use ScienceDirect parser
-        return parse_file_for_table_extraction_science_direct(
+        err_files = parse_file_for_table_extraction_science_direct(
             file_folder_path=file_folder_path,
             save_folder_path=save_folder_path,
             encoding=encoding,
@@ -404,7 +406,7 @@ def parse_table_to_tsv(
         )
     elif non_tabular_file_format.lower() == "pmc":
         # Use PMC parser
-        return parse_file_for_table_extraction_pmc(
+        err_files = parse_file_for_table_extraction_pmc(
             file_folder_path=file_folder_path,
             save_folder_path=save_folder_path,
             encoding=encoding,
@@ -412,7 +414,7 @@ def parse_table_to_tsv(
         )
     elif non_tabular_file_format.lower() == "arxiv":
         # Use TeX parser for Arxiv
-        return parse_file_for_table_extraction_tex(
+        err_files = parse_file_for_table_extraction_tex(
             file_folder_path=file_folder_path,
             save_folder_path=save_folder_path,
             encoding=encoding,
@@ -422,6 +424,44 @@ def parse_table_to_tsv(
         raise ValueError(
             f"Unsupported file format: {non_tabular_file_format}\nSupported formats: None, PDF, scienceDirect, PMC, Arxiv"
         )
+
+    # Extract TSV content to JSON for all generated subdirectories
+    if os.path.exists(save_folder_path):
+        json_classify_path = os.path.join(save_folder_path, "json_classify")
+        json_example_path = os.path.join(save_folder_path, "json_example")
+
+        try:
+            os.makedirs(json_classify_path, exist_ok=True)
+            os.makedirs(json_example_path, exist_ok=True)
+        except OSError as e:
+            logger.error(f"Failed to create json directories: {e}")
+
+        for item in os.listdir(save_folder_path):
+            item_path = os.path.join(save_folder_path, item)
+            # Skip the output directories we just created or other non-directories
+            if not os.path.isdir(item_path) or item in [
+                "json_classify",
+                "json_example",
+            ]:
+                continue
+
+            try:
+                extract_tsv_content_to_json(
+                    item_path,
+                    encoding=encoding,
+                    processing_mode="classify",
+                    save_path=json_classify_path,
+                )
+                extract_tsv_content_to_json(
+                    item_path,
+                    encoding=encoding,
+                    processing_mode="example",
+                    save_path=json_example_path,
+                )
+            except Exception as e:
+                logger.error(f"Error extracting JSON for {item_path}: {e}")
+
+    return err_files
 
 
 def build_optm_set(
