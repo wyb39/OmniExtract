@@ -157,21 +157,31 @@ def compareStringsWithField(pred, exam, field):
     """
     Compare the matching degree between input and output strings
     """
-    if pred[field.name] is None and exam[field.name] is None:
+    def normalize_empty(value):
+        if value is None:
+            return ""
+        if isinstance(value, str):
+            stripped = value.strip()
+            if stripped == "":
+                return ""
+            if stripped.lower() in {"none", "null", "not specified"}:
+                return ""
+        return value
+
+    pred_value = normalize_empty(pred[field.name])
+    exam_value = normalize_empty(exam[field.name])
+
+    if pred_value == "" and exam_value == "":
         return 1
-    elif pred[field.name] is None or exam[field.name] is None:
+    elif pred_value == "" or exam_value == "":
         return 0
     else:
         list_candidate_scores = [
-            int(answer_exact_match_str(pred[field.name], [exam[field.name]], frac=0.8)),
-            tds.smith_waterman.normalized_similarity(
-                pred[field.name], exam[field.name]
-            ),
-            tds.ratcliff_obershelp.normalized_similarity(
-                pred[field.name], exam[field.name]
-            ),
-            tds.jaccard.normalized_similarity(pred[field.name], exam[field.name]),
-            tds.lcsstr.normalized_similarity(pred[field.name], exam[field.name]),
+            int(answer_exact_match_str(pred_value, [exam_value], frac=0.8)),
+            tds.smith_waterman.normalized_similarity(pred_value, exam_value),
+            tds.ratcliff_obershelp.normalized_similarity(pred_value, exam_value),
+            tds.jaccard.normalized_similarity(pred_value, exam_value),
+            tds.lcsstr.normalized_similarity(pred_value, exam_value),
         ]
 
         return max(list_candidate_scores) >= 0.8
@@ -181,17 +191,31 @@ def compareStrings(pred, exam):
     """
     Compare the matching degree between input and output strings
     """
-    if pred is None and exam is None:
+    def normalize_empty(value):
+        if value is None:
+            return ""
+        if isinstance(value, str):
+            stripped = value.strip()
+            if stripped == "":
+                return ""
+            if stripped.lower() in {"none", "null", "not specified"}:
+                return ""
+        return value
+
+    pred_value = normalize_empty(pred)
+    exam_value = normalize_empty(exam)
+
+    if pred_value == "" and exam_value == "":
         return 1
-    elif pred is None or exam is None:
+    elif pred_value == "" or exam_value == "":
         return 0
     else:
         list_candidate_scores = [
-            int(answer_exact_match_str(pred, [exam], frac=0.8)),
-            tds.smith_waterman.normalized_similarity(pred, exam),
-            tds.ratcliff_obershelp.normalized_similarity(pred, exam),
-            tds.jaccard.normalized_similarity(pred, exam),
-            tds.lcsstr.normalized_similarity(pred, exam),
+            int(answer_exact_match_str(pred_value, [exam_value], frac=0.8)),
+            tds.smith_waterman.normalized_similarity(pred_value, exam_value),
+            tds.ratcliff_obershelp.normalized_similarity(pred_value, exam_value),
+            tds.jaccard.normalized_similarity(pred_value, exam_value),
+            tds.lcsstr.normalized_similarity(pred_value, exam_value),
         ]
         return max(list_candidate_scores) >= 0.8
 
