@@ -4982,21 +4982,26 @@ def _read_log_tail_incremental(file_path: str, from_pos: int | None, max_initial
     Input({"type": "open-log-btn", "index": ALL}, "n_clicks_timestamp"),
     Input("close-realtime-log-modal", "n_clicks"),
     Input("realtime-log-interval", "n_intervals"),
+    Input("realtime-log-modal", "is_open"),
     State({"type": "open-log-btn-file-path", "index": ALL}, "data"),
-    State("realtime-log-modal", "is_open"),
     State("realtime-log-path", "data"),
     State("realtime-log-position", "data"),
     State("realtime-log-buffer", "data"),
     State("realtime-log-interval", "disabled"),
     prevent_initial_call=True,
 )
-def open_realtime_log_modal(all_clicks, all_click_timestamps, close_clicks, n_intervals, all_paths, is_open, cur_path, cur_pos, cur_buf, interval_disabled):
+def open_realtime_log_modal(all_clicks, all_click_timestamps, close_clicks, n_intervals, is_open, all_paths, cur_path, cur_pos, cur_buf, interval_disabled):
     ctx = dash.callback_context
     if not ctx.triggered:
         raise dash.exceptions.PreventUpdate
     try:
         trigger = ctx.triggered[0]["prop_id"]
         prop = trigger.split(".")[0]
+        # Close modal via built-in close (X) or backdrop
+        if prop == "realtime-log-modal":
+            if not is_open:
+                return False, None, None, "", 0, True, ""
+            raise dash.exceptions.PreventUpdate
         # Close modal
         if prop == "close-realtime-log-modal":
             return False, None, None, "", 0, True, ""
