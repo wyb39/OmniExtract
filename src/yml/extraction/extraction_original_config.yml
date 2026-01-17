@@ -4,9 +4,9 @@
 # === INPUT FIELDS ===
 # Define what data your model will receive as input
 inputFields:
-  - name: "Method"
+  - name: "input_text"
     field_type: "str"  # Can be: str, int, float, bool, list, literal, image
-    description: "The method section of a Nature Communications journal article"
+    description: "description of this input field"
 
 # Add more input fields as needed
 # - name: "additional_input"
@@ -16,20 +16,15 @@ inputFields:
 # === OUTPUT FIELDS ===
 # Define what your model should extract or generate from the input
 outputFields:
-  - name: "public_datasets"
-    field_type: "list"  # List of public dataset identifiers
-    description: "Public datasets mentioned in the literature"
-  - name: "non_public_datasets"
-    field_type: "list"  # List of non-public dataset identifiers
-    description: "Non-public datasets mentioned in the literature"
-  - name: "databases"
-    field_type: "list"  # List of database names/links
-    description: "Database links mentioned in the literature"
+  - name: "extracted_info"
+    field_type: "str"  # Can be: str, int, float, bool, list, literal, image
+    description: "Information extracted from the input text"
 
 
 # === PROMPT CONFIGURATION ===
+# replace {input_text} and {extracted_info} with your actual field names
 initial_prompt: |
-  You are a data analyst organizing the data usage in literature published in the journal Nature Communications. Your goals are: 1. Extract the identifiers of all public datasets mentioned in the literature 2. Extract the identifiers of all non-public datasets (i.e., self-created datasets) provided in the literature 3. Extract the names of all databases used in the literature. Please carefully read the methods section of the literature to completely and accurately extract the above information.
+  Given the {input_text}， extract the information about {extracted_info}. Following these Rules: 1.xxxx 2.xxxx
 
 # === DATA AND SAVE CONFIGURATION ===
 dataset: "/data/tangbx/extraction/nc/test_dataset.json"  # Path to the dataset file (JSON, CSV, TSV, or Excel format)

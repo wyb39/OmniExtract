@@ -982,7 +982,7 @@ def handle_run_optimization(
                 experiment_name=task_name_prompt_optimization,
                 input_fields_data=input_fields,
                 output_fields_data=output_fields,
-                initial_prompt=initial_prompt or "Please optimize this prompt template",
+                initial_prompt=initial_prompt or "Extract the target information from the given text",
                 task=task or "Extraction",
                 optim_burden=optim_burden or "medium",
                 threads=threads or 6,
@@ -1334,7 +1334,7 @@ def handle_table_extraction(
                 extract_classify_prompt=classification_prompt
                 or "Please classify the table content",
                 extract_extract_prompt=extraction_prompt
-                or "Please extract information from the table",
+                or "Please extract the data according to the specified fields",
                 extract_num_threads=threads or 6,
                 output_dir=sub_dir,
                 filename=yaml_filename,
@@ -1359,7 +1359,7 @@ def handle_table_extraction(
             "classify_prompt": classification_prompt
             or "Please classify the table content",
             "extract_prompt": extraction_prompt
-            or "Please extract information from the table",
+            or "Please extract the data according to the specified fields",
             "extract_directly": False,
             "num_threads": threads or 6,
         }
@@ -2729,7 +2729,7 @@ def handle_original_extraction(
         if not input_fields:
             input_fields = [
                 {
-                    "name": "Method",
+                    "name": "input_text",
                     "field_type": "str",
                     "description": "Input field description",
                 }
@@ -2750,7 +2750,7 @@ def handle_original_extraction(
         if not output_fields:
             output_fields = [
                 {
-                    "name": "extracted_value",
+                    "name": "extracted_info",
                     "field_type": "str",
                     "description": "Extracted data from documents",
                 }
@@ -2792,7 +2792,7 @@ def handle_original_extraction(
                 input_fields=input_fields,
                 output_fields=output_fields,
                 initial_prompt=initial_prompt
-                or "You are a data analyst organizing the data usage in literature published in the journal Nature Communications. Your goals are: 1. Extract the identifiers of all public datasets mentioned in the literature 2. Extract the identifiers of all non-public datasets (i.e., self-created datasets) provided in the literature 3. Extract the names of all databases used in the literature. Please carefully read the methods section of the literature to completely and accurately extract the above information.",
+                or "Extract the target information from the given text",
                 judging=judging or "",
                 task=task or "Extraction",
                 threads=threads or 6,
@@ -2807,7 +2807,7 @@ def handle_original_extraction(
                 "inputFields": input_fields,
                 "outputFields": output_fields,
                 "initial_prompt": initial_prompt
-                or "You are a data analyst organizing the data usage in literature published in the journal Nature Communications. Your goals are: 1. Extract the identifiers of all public datasets mentioned in the literature 2. Extract the identifiers of all non-public datasets (i.e., self-created datasets) provided in the literature 3. Extract the names of all databases used in the literature. Please carefully read the methods section of the literature to completely and accurately extract the above information.",
+                or "Extract the target information from the given text",
                 "judging": judging or "",
                 "task": task or "Extraction",
                 "threads": threads or 6,

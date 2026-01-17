@@ -98,7 +98,7 @@ def prompt_optimization_layout():
                                     html.Label("Input Field Name", className="form-label"),
                                     dcc.Input(
                                         id={"type": "input-name", "index": "input-field-initial"},
-                                        placeholder="Method",
+                                        placeholder="input_text",
                                         # value="Method",
                                         className="form-input",
                                         style={"height": "38px"}
@@ -127,8 +127,7 @@ def prompt_optimization_layout():
                                 html.Label("Input Field Description", className="form-label"),
                                 dcc.Input(
                                     id={"type": "input-description", "index": "input-field-initial"},
-                                    placeholder="Describe what this input field represents (e.g., 'The method section of a research paper')",
-                                    # value="The method section of a Nature Communications journal article",
+                                    placeholder="Description of the input field.",
                                     className="form-input"
                                 )
                             ], className="form-group"),
@@ -217,7 +216,7 @@ def prompt_optimization_layout():
                                     html.Label("Output Field Name", className="form-label"),
                                     dcc.Input(
                                         id={"type": "output-name", "index": "output-field-initial"},
-                                        placeholder="output_field",
+                                        placeholder="extracted_info",
                                         #value="extracted_data",
                                         className="form-input",
                                         style={"height": "38px"}
@@ -308,7 +307,7 @@ def prompt_optimization_layout():
                         html.Label("Initial Prompt", className="form-label"),
                         dcc.Textarea(
                             id="initial-prompt",
-                            placeholder="Write your initial prompt template here.\nUse {field_name} placeholders for input fields.",
+                            placeholder="Given the {input_text}， extract the information about {extracted_info}. Following these Rules: 1.xxxx 2.xxxx",
                             className="form-textarea",
                             style={"height": "120px"}
                         )

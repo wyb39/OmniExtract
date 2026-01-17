@@ -370,7 +370,7 @@ def table_parsing_layout():
                                             dcc.Textarea(
                                                 id="extract-classify-prompt",
                                                 placeholder="Please classify the table content",
-                                                value="Please classify the table content",
+                                                value="",
                                                 className="form-textarea",
                                                 style={"height": "80px"}
                                             ),
@@ -381,7 +381,7 @@ def table_parsing_layout():
                                             dcc.Textarea(
                                                 id="extract-extract-prompt",
                                                 placeholder="Please extract the data according to the specified fields",
-                                                value="Please extract the data according to the specified fields",
+                                                value="",
                                                 className="form-textarea",
                                                 style={"height": "80px"}
                                             ),

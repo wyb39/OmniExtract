@@ -127,7 +127,7 @@ def doc_extraction_layout():
                                                         html.Label("Input Field Name", className="form-label"),
                                                         dcc.Input(
                                                             id={"type": "input-name", "index": "input-field-initial"},
-                                                            placeholder="Method",
+                                                            placeholder="input_text",
                                                             # value="Method",
                                                             className="form-input",
                                                             style={"height": "38px"}
@@ -156,7 +156,7 @@ def doc_extraction_layout():
                                                     html.Label("Input Field Description", className="form-label"),
                                                     dcc.Input(
                                                         id={"type": "input-description", "index": "input-field-initial"},
-                                                        placeholder="The method section of a Nature Communications journal article",
+                                                        placeholder="Description of the input field",
                                                         # value="The method section of a Nature Communications journal article",
                                                         className="form-input"
                                                     )
@@ -250,7 +250,7 @@ def doc_extraction_layout():
                                                         html.Label("Output Field Name", className="form-label"),
                                                         dcc.Input(
                                                             id={"type": "output-name", "index": "output-field-initial"},
-                                                            placeholder="output_field",
+                                                            placeholder="extracted_info",
                                                             #value="extracted_data",
                                                             className="form-input",
                                                             style={"height": "38px"}
@@ -341,7 +341,7 @@ def doc_extraction_layout():
                                             html.Label("Initial Prompt", className="form-label"),
                                             dcc.Textarea(
                                                 id="initial-prompt",
-                                                placeholder="You are a data analyst organizing the data usage in literature published in the journal Nature Communications. Your goals are: 1. Extract the identifiers of all public datasets mentioned in the literature 2. Extract the identifiers of all non-public datasets (i.e., self-created datasets) provided in the literature 3. Extract the names of all databases used in the literature. Please carefully read the methods section of the literature to completely and accurately extract the above information.",
+                                                placeholder="Given the {input_text}， extract the information about {extracted_info}. Following these Rules: 1.xxxx 2.xxxx",
                                                 className="form-textarea",
                                                 style={"height": "120px"}
                                             )

@@ -20,17 +20,13 @@ inputFields:
 # === OUTPUT FIELDS ===
 # Define what your model should extract or generate
 outputFields:
-  - name: "extracted_value"
+  - name: "extracted_info"
     field_type: "str"
     description: "Description of what to extract"
 
 # === PROMPT CONFIGURATION ===
 initial_prompt: |
-  Write your initial prompt template here.
-  Use {field_name} placeholders for input fields.
-  
-  Example: Given the text: {input_text}
-  Extract the following information...
+  Given the {input_text}， extract the information about {extracted_info}. Following these Rules: 1.xxxx 2.xxxx
 
 # === DATA AND SAVE CONFIGURATION ===
 dataset: "path/to/your/dataset.csv"  # Must have columns matching input/output field names
