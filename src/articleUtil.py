@@ -663,6 +663,12 @@ class PubMedCentralXmlParser:
 
     def extract_sections(self):
         sections = {}
+        front = self.root.find(".//front")
+        if front is not None:
+            front_notes = front.findall("./notes")
+            for note in front_notes:
+                self._process_notes_section(note, sections, ["Front"])
+
         body = self.root.find(".//body")
         if body is not None:
             top_level_sections = body.findall("./sec")
@@ -675,6 +681,10 @@ class PubMedCentralXmlParser:
             for section in top_level_sections:
                 self._process_section(section, sections, ["Back"])
 
+            back_notes = back.findall("./notes")
+            for note in back_notes:
+                self._process_notes_section(note, sections, ["Back"])
+
         if not sections:
             self._extract_from_body_non_sec(body, sections)
 
@@ -686,6 +696,41 @@ class PubMedCentralXmlParser:
             if abstract_text and abstract_text != "No abstract available":
                 sections["Abstract"] = abstract_text
         return sections
+
+    def _process_notes_section(self, notes_element, sections, parent_titles):
+        title_text = "".join(notes_element.findtext("./title", default=""))
+        title_text = title_text.replace("\ufeff", "").strip()
+        current_title = title_text or "Notes"
+        current_titles = parent_titles + [current_title]
+        section_key = " > ".join(current_titles)
+
+        content_parts = []
+        for p in notes_element.findall("./p"):
+            p_text = "".join(p.itertext()).replace("\ufeff", "").strip()
+            if p_text:
+                content_parts.append(p_text)
+
+        if not content_parts:
+            raw_text = " ".join(part.strip() for part in notes_element.itertext() if part.strip())
+            raw_text = raw_text.replace("\ufeff", "").strip()
+            if raw_text and title_text:
+                if raw_text.lower().startswith(title_text.lower()):
+                    raw_text = raw_text[len(title_text):].strip(" :\n\t")
+            if raw_text:
+                content_parts.append(raw_text)
+
+        if content_parts:
+            if section_key not in sections:
+                sections[section_key] = ""
+            if sections[section_key]:
+                sections[section_key] += "\n\n"
+            sections[section_key] += "\n\n".join(content_parts)
+
+        for sec in notes_element.findall("./sec"):
+            self._process_section(sec, sections, current_titles)
+
+        for nested_note in notes_element.findall("./notes"):
+            self._process_notes_section(nested_note, sections, current_titles)
 
     def _extract_from_body_non_sec(self, body, sections):
         if body is None:
@@ -939,6 +984,7 @@ class PubMedCentralXmlParser:
             if self.content["references"]:
                 f.write("## References\n")
                 f.write(f"{self.content['references']}\n")
+
 
 
 def split_md(folder_path, save_path):
