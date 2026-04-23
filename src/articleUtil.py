@@ -659,7 +659,6 @@ class PubMedCentralXmlParser:
             table_id = table.get("id")
             if table_id:
                 tables[table_id] = self._convert_table_to_html(table)
-        print(tables)
         return tables
 
     def extract_sections(self):
@@ -669,7 +668,67 @@ class PubMedCentralXmlParser:
             top_level_sections = body.findall("./sec")
             for section in top_level_sections:
                 self._process_section(section, sections, [])
+
+        back = self.root.find(".//back")
+        if back is not None:
+            top_level_sections = back.findall("./sec")
+            for section in top_level_sections:
+                self._process_section(section, sections, ["Back"])
+
+        if not sections:
+            self._extract_from_body_non_sec(body, sections)
+
+        if not sections:
+            self._extract_from_global_sec_fallback(sections)
+
+        if not sections:
+            abstract_text = self.extract_abstract()
+            if abstract_text and abstract_text != "No abstract available":
+                sections["Abstract"] = abstract_text
         return sections
+
+    def _extract_from_body_non_sec(self, body, sections):
+        if body is None:
+            return
+
+        # Handle documents that only carry supplementary material in body.
+        supp_items = body.findall("./supplementary-material")
+        for idx, supp in enumerate(supp_items, 1):
+            title = supp.findtext("./title") or supp.findtext("./label")
+            if title:
+                title = title.replace("\ufeff", "").strip()
+            if not title:
+                title = f"Supplementary material {idx}"
+            content = " ".join(part.strip() for part in supp.itertext() if part.strip())
+            if content:
+                sections[title] = content
+
+        if sections:
+            return
+
+        body_paragraphs = []
+        for p in body.findall("./p"):
+            p_text = "".join(p.itertext()).strip()
+            if p_text:
+                body_paragraphs.append(p_text)
+        if body_paragraphs:
+            sections["Body"] = "\n\n".join(body_paragraphs)
+
+    def _extract_from_global_sec_fallback(self, sections):
+        all_secs = self.root.findall(".//sec")
+        if not all_secs:
+            return
+
+        parent_map = {child: parent for parent in self.root.iter() for child in parent}
+        top_level_secs = [
+            sec for sec in all_secs if parent_map.get(sec) is None or parent_map.get(sec).tag != "sec"
+        ]
+
+        if not top_level_secs:
+            top_level_secs = all_secs
+
+        for section in top_level_secs:
+            self._process_section(section, sections, [])
 
     def _process_paragraph_content(self, paragraph_element):
         """parse paragraph content"""
@@ -706,18 +765,20 @@ class PubMedCentralXmlParser:
 
     def _process_section(self, section_element, sections, parent_titles):
         title_element = section_element.find("./title")
-        if title_element is None:
-            # For the top-level body element
-            current_titles = parent_titles
-            section_key = ""
-        else:
-            title = title_element.text
-            if title is not None and "introduction" in title.lower():
-                title = "Introduction"
-            elif title is None:
-                title = ""
-            current_titles = parent_titles + [title]
-            section_key = " > ".join(current_titles)
+        title = ""
+        if title_element is not None:
+            title = "".join(title_element.itertext()).replace("\ufeff", "").strip()
+
+        if not title:
+            sec_type = (section_element.get("sec-type") or "").replace("\ufeff", "").strip()
+            sec_id = (section_element.get("id") or "").replace("\ufeff", "").strip()
+            title = sec_type or sec_id or "Unnamed Section"
+
+        if "introduction" in title.lower():
+            title = "Introduction"
+
+        current_titles = parent_titles + [title]
+        section_key = " > ".join(current_titles)
 
         content = []
         tables = []
@@ -773,26 +834,19 @@ class PubMedCentralXmlParser:
         if not table_content:
             return str(table)
 
-        # Process header rows
         thead = soup.new_tag("thead")
         header_rows = table_content.findall("./thead/tr")
-        if not header_rows:
-            # Check if first row is header
-            all_rows = table_content.findall("./tr")
+        body_rows = table_content.findall("./tbody/tr")
+        if not header_rows and not body_rows:
+            # Some PMC tables omit explicit thead/tbody wrappers.
+            all_rows = table_content.findall(".//tr")
             if all_rows:
                 header_rows = [all_rows[0]]
                 body_rows = all_rows[1:]
-            else:
-                header_rows = []
-                body_rows = []
-        else:
-            body_rows = table_content.findall("./tbody/tr")
 
         for row in header_rows:
             tr = soup.new_tag("tr")
-            th_cells = row.findall("./th")
-            td_cells = row.findall("./td")
-            cells = th_cells if th_cells else td_cells
+            cells = [cell for cell in list(row) if cell.tag in {"th", "td"}]
             for cell in cells:
                 th = soup.new_tag("th")
                 if cell.get("align"):
@@ -809,7 +863,7 @@ class PubMedCentralXmlParser:
         tbody = soup.new_tag("tbody")
         for row in body_rows:
             tr = soup.new_tag("tr")
-            cells = row.findall("./td")
+            cells = [cell for cell in list(row) if cell.tag in {"th", "td"}]
             for cell in cells:
                 td = soup.new_tag("td")
                 if cell.get("align"):
