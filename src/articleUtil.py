@@ -1053,7 +1053,7 @@ def split_md(folder_path, save_path):
 
             # Save parsed sections to JSON file with proper encoding
             with open(json_path, "w", encoding="utf-8") as f:
-                json.dump(md_obj.sections, f)
+                json.dump(md_obj.sections, f, ensure_ascii=False)
 
             processed_count += 1
 
@@ -1132,7 +1132,7 @@ def parse_article_to_md(folder_path, save_path):
             tmp_file.close()
             with open(tmp_cfg_path, "w", encoding="utf-8") as f:
                 import json as _json
-                _json.dump(cfg, f)
+                _json.dump(cfg, f, ensure_ascii=False)
             args.extend(["--config_json", tmp_cfg_path])
         try:
             _workers_val = None if str(MARKER_WORKS_NUM).strip().upper() == "AUTO" else int(MARKER_WORKS_NUM)
@@ -1466,7 +1466,7 @@ def convert_md_to_json(folder_path, save_path):
 
             # Save raw content to JSON file
             with open(json_path, "w", encoding="utf-8") as f:
-                json.dump({"Document": markdown_content}, f)
+                json.dump({"Document": markdown_content}, f, ensure_ascii=False)
 
             processed_count += 1
             logger.debug(f"Successfully processed: {file_name}")

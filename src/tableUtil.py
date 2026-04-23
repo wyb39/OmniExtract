@@ -751,7 +751,7 @@ def parse_file_for_table_extraction_pdf(
             tmp_file.close()
             with open(tmp_cfg_path, "w", encoding="utf-8") as f:
                 import json as _json
-                _json.dump(cfg, f)
+                _json.dump(cfg, f, ensure_ascii=False)
             args.extend(["--config_json", tmp_cfg_path])
         try:
             completed = subprocess.run(args, stdout=None, stderr=None, text=True, check=True)

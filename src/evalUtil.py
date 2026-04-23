@@ -598,7 +598,7 @@ def savePredictResult(df: pd.DataFrame, save_dir: str, output_file: str) -> None
 
         suffix = output_file.lower().split(".")[-1] if "." in output_file else ""
         if suffix == "json":
-            df.to_json(file_path, orient="records")
+            df.to_json(file_path, orient="records", force_ascii=False)
         elif suffix == "csv":
             df.to_csv(file_path, index=False, encoding="utf-8")
         elif suffix == "tsv":
@@ -606,7 +606,7 @@ def savePredictResult(df: pd.DataFrame, save_dir: str, output_file: str) -> None
         elif suffix in ["xlsx", "xls"]:
             df.to_excel(file_path, index=False)
         elif suffix == "jsonl":
-            df.to_json(file_path, orient="records", lines=True)
+            df.to_json(file_path, orient="records", lines=True, force_ascii=False)
         else:
             raise ValueError("Invalid dataset format")
 
