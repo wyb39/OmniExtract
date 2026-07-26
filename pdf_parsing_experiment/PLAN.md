@@ -39,53 +39,50 @@
 - 对纯扫描 PDF 返回明确的 `ocr_required` 状态。
 - 第一阶段不重建复杂公式；先保留可提取文本和原始字符顺序。
 
-## 3. 建议架构
+## 3. 精简架构
 
 ```text
 pdf_parsing_experiment/
 ├── README.md
 ├── PLAN.md
-├── models.py
-├── pipeline.py
-├── renderer.py
-├── extractors/
-│   ├── pypdf_extractor.py
-│   └── pdfplumber_extractor.py
-├── layout/
-│   ├── reading_order.py
-│   ├── paragraph_builder.py
-│   ├── heading_detector.py
-│   └── header_footer.py
-├── tables/
-│   ├── detector.py
-│   ├── normalizer.py
-│   └── renderer.py
+├── pdf_to_markdown.py
+├── markdown_renderer.py
 └── tests/
-    ├── fixtures/
     ├── expected/
-    └── test_pipeline.py
+    ├── output/
+    ├── evaluate_corpus.py
+    └── test_pdf_to_markdown.py
 ```
 
-## 4. 中间文档模型
+核心实现只保留两个文件：
+
+- `pdf_to_markdown.py`：公开 API 和 CLI、`pypdf` 元数据/文本回退、`pdfplumber`
+  字符与表格抽取、阅读顺序、页眉页脚过滤、标题和段落识别。
+- `markdown_renderer.py`：将轻量中间结果渲染为 Markdown，负责粗体、标题、列表、
+  GFM 表格和 HTML 复杂表格。
+
+测试 PDF 保留在现有 `test_pdfs/`，测试代码、期望结果和生成结果单列，不计入核心文件。
+在实验结论稳定前不再拆分 `extractors`、`layout`、`tables` 等子包；只有迁移到 `src`
+且出现明确复用边界时再考虑拆分。
+
+## 4. 轻量中间模型
 
 先将两个解析器的结果归一化，再生成 Markdown：
 
 ```text
 Document
 └── Page
-    └── Block
-        └── Line
-            └── Span
+    └── Block（text / heading / list / table）
 ```
 
-核心字段包括：
+模型直接定义在 `pdf_to_markdown.py` 中，只保留渲染和调试实际需要的字段：
 
-- `Document`：标题、作者、元数据、目录、页面列表和解析状态。
-- `Page`：页码、页面宽高、文本块、表格、图片区域。
-- `Block`：类型、边界框、阅读顺序、置信度。
-- `Line`：基线、字号、行距、文本。
-- `Span`：文本、字体、字号、粗体、斜体、边界框。
-- `Table`：标题、边界框、行列数、单元格和合并关系。
+- `Document`：元数据、页面列表、解析状态和警告。
+- `Page`：页码、宽高和已排序的块。
+- `Block`：类型、文本或表格数据、边界框、字号、粗体比例、标题层级和置信度。
+
+字符、单词和行仅作为 `pdf_to_markdown.py` 内部临时结构使用，不建立公共类层级。
+调试 JSON 直接由上述对象序列化，避免维护第二套模型。
 
 ## 5. 分阶段实施
 
@@ -119,14 +116,14 @@ Document
    - 字符边界框
    - 线条、矩形和图片区域
    - 候选表格和单元格
-3. 输出可序列化的中间文档 JSON，方便调试。
+3. 归一化为 `Document -> Page -> Block`，并可选输出调试 JSON。
 
 ### 阶段 C：版面和阅读顺序
 
 1. 对重复页眉、页脚和页码进行跨页统计并删除。
 2. 根据水平间隔和文本块边界识别单栏、多栏和跨栏区域。
 3. 先按栏排序，再按纵坐标排序，恢复阅读顺序。
-4. 将字符聚合为 Span、Line、Block。
+4. 在单文件内部将字符聚合为临时行，再输出 Block。
 5. 处理连字符断词、软换行、重复字符和异常空格。
 
 ### 阶段 D：标题、段落和样式
@@ -157,7 +154,7 @@ Document
 
 ### 阶段 F：Markdown 渲染
 
-1. 依据中间模型统一生成 Markdown。
+1. 由 `markdown_renderer.py` 依据轻量中间模型统一生成 Markdown。
 2. 转义会破坏 Markdown 的特殊字符。
 3. 保留标题、粗体、列表、表格标题和图注。
 4. 输出：
@@ -169,7 +166,7 @@ Document
 
 1. 与 Marker 输出进行结构对照。
 2. 使用页面 PNG 对照阅读顺序、表格边界和内容完整性。
-3. 建立快照测试和单元测试。
+3. 在 `tests/` 中建立语料评估、快照测试和单元测试。
 4. 稳定后将模块迁移到 `src`。
 5. 在 `articleUtil.py` 中增加新的解析后端，但保留 Marker 回退路径。
 
@@ -188,9 +185,37 @@ Document
 ## 7. 当前执行顺序
 
 1. 降级并固定兼容版本的 `pdfplumber`。
-2. 实现中间文档模型。
-3. 完成单页字符、单词和基础表格抽取。
-4. 完成单栏版面重建。
-5. 增加多栏、标题和粗体识别。
-6. 完善复杂表格。
-7. 建立基准测试并迁移到 `src`。
+2. 在 `pdf_to_markdown.py` 中完成轻量模型、双引擎抽取和单栏版面重建。
+3. 在同一文件中增加多栏、页眉页脚、标题和粗体识别。
+4. 在 `markdown_renderer.py` 中完成正文和表格输出。
+5. 使用 `tests/evaluate_corpus.py` 对 `test_pdfs/` 全量运行并记录问题。
+6. 完善复杂表格与回归测试。
+7. 验证稳定后迁移到 `src`，届时再按真实复用边界决定是否拆分。
+
+## 8. 第一版实现状态
+
+已完成：
+
+- 两文件核心实现：`pdf_to_markdown.py` 与 `markdown_renderer.py`。
+- `pdfplumber` 字符坐标、字体、粗体和表格抽取。
+- `pypdf` 无文本页回退与元数据补充。
+- 轻量 `Document -> Page -> Block` 模型及调试 JSON。
+- 双栏阅读顺序、跨栏区段、重复页眉页脚、段落和断词处理。
+- H1 文档标题、H2/H3 章节、粗体、列表、GFM/HTML 表格渲染。
+- 扫描文档 `ocr_required` 状态。
+- 独立单元测试和全语料评估脚本。
+
+验证记录：
+
+- 单元测试 4 项全部通过。
+- `test_pdfs/` 的 31 份文件各取前 5 页完成兼容测试，0 个解析异常。
+- 最新代码对 31 份文件各取前 2 页再次回归，0 个解析异常；30 份为 `ok`，
+  `DAA.pdf` 为预期的 `ocr_required`。
+- 已将代表性双栏论文首页渲染为 PNG，对照修正 Abstract、Keywords、章节与双栏正文顺序。
+
+进入 `src` 前仍需完成：
+
+- 扩充表格真值与跨页表格用例。
+- 抑制没有可靠边界的矢量图坐标轴标签。
+- 与 Marker 输出做可量化结构对比。
+- 为公式和 OCR 设计明确的后续处理接口。
