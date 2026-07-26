@@ -2,6 +2,8 @@
 
 This directory is a temporary workspace for developing and comparing the new PDF parsing pipeline before it is moved into `src`.
 
+See [PLAN.md](PLAN.md) for the detailed implementation plan, output contract, architecture, and acceptance criteria.
+
 ## Intended pipeline
 
 1. Accept a PDF input and collect document metadata.

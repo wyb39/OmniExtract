@@ -78,7 +78,7 @@ optuna==4.2.1
 packaging==24.2
 pandas==2.1.0
 pdftext==0.6.2
-pdfplumber==0.11.10
+pdfplumber==0.11.7
 pypdf==6.14.2
 pillow==10.4.0
 platformdirs==4.3.6
