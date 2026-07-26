@@ -11,6 +11,7 @@ import argparse
 import json
 import math
 import re
+import tempfile
 from collections import Counter
 from dataclasses import asdict, dataclass, field
 from difflib import SequenceMatcher
@@ -738,7 +739,7 @@ def _reader_metadata(reader: PdfReader) -> dict[str, Any]:
     return metadata
 
 
-def parse_pdf(
+def _parse_pdf_native(
     pdf_path: str | Path,
     *,
     password: str | None = None,
@@ -856,6 +857,255 @@ def parse_pdf(
     return Document(source=str(source), metadata=metadata, pages=pages, status=status, warnings=warnings)
 
 
+def _base_opendoc_label(label: str) -> str:
+    value = (label or "text").strip().lower()
+    suffix = value.rsplit("_", 1)
+    return suffix[0] if len(suffix) == 2 and suffix[1].isdigit() else value
+
+
+def _opendoc_bbox(value: Any) -> BBox:
+    if isinstance(value, (list, tuple)) and len(value) == 4:
+        return tuple(float(item) for item in value)
+    return (0.0, 0.0, 0.0, 0.0)
+
+
+def _document_from_opendoc_results(
+    source: Path,
+    results: dict[str, Any] | list[dict[str, Any]],
+) -> Document:
+    """Convert OpenDoc recognition results to the experiment's lightweight model."""
+
+    page_results = results if isinstance(results, list) else [results]
+    pages: list[Page] = []
+    warnings: list[str] = []
+    ignored_labels = {
+        "number",
+        "footnote",
+        "header",
+        "header_image",
+        "footer",
+        "footer_image",
+        "aside_text",
+        "chart",
+    }
+    recognized_characters = 0
+    timings: list[dict[str, Any]] = []
+
+    for index, result in enumerate(page_results):
+        blocks: list[Block] = []
+        timings.append(dict(result.get("timing") or {}))
+
+        def append_heading(text: str, bbox: BBox, level: int, confidence: float) -> None:
+            clean_text = _clean_text(text)
+            if (
+                blocks
+                and blocks[-1].kind == "heading"
+                and _clean_text(blocks[-1].text).casefold() == clean_text.casefold()
+            ):
+                return
+            blocks.append(
+                Block(
+                    kind="heading",
+                    text=clean_text,
+                    bbox=bbox,
+                    level=level,
+                    confidence=confidence,
+                )
+            )
+
+        for recognition in result.get("recognition_results", []):
+            label = _base_opendoc_label(str(recognition.get("label", "text")))
+            if label in ignored_labels or recognition.get("is_image"):
+                continue
+            text = str(recognition.get("text_unirec") or recognition.get("text") or "").strip()
+            if not text:
+                continue
+            bbox = _opendoc_bbox(recognition.get("bbox"))
+            confidence = float(recognition.get("score", 1.0) or 0.0)
+            recognized_characters += len(text)
+
+            if label == "doc_title":
+                append_heading(text, bbox, 1, confidence)
+            elif label in {"paragraph_title", "reference"}:
+                append_heading(text, bbox, 2, confidence)
+            elif label == "abstract":
+                abstract_text = re.sub(r"^\s*abstract\s*[:.-]?\s*", "", text, flags=re.IGNORECASE)
+                append_heading("Abstract", bbox, 2, confidence)
+                if abstract_text:
+                    blocks.append(
+                        Block(
+                            kind="raw_markdown",
+                            text=abstract_text,
+                            bbox=bbox,
+                            confidence=confidence,
+                        )
+                    )
+            else:
+                blocks.append(
+                    Block(
+                        kind="raw_markdown",
+                        text=text,
+                        bbox=bbox,
+                        confidence=confidence,
+                    )
+                )
+
+        pages.append(
+            Page(
+                number=int(result.get("pdf_page", index + 1)),
+                width=float(result.get("width", 0.0) or 0.0),
+                height=float(result.get("height", 0.0) or 0.0),
+                blocks=blocks,
+            )
+        )
+
+    status = "ok" if recognized_characters else "ocr_failed"
+    if status == "ocr_failed":
+        warnings.append("OpenDoc completed but returned no recognized text.")
+    return Document(
+        source=str(source),
+        metadata={
+            "backend": "opendoc",
+            "page_count": len(pages),
+            "opendoc_timing": timings,
+        },
+        pages=pages,
+        status=status,
+        warnings=warnings,
+    )
+
+
+def _parse_pdf_opendoc(
+    pdf_path: str | Path,
+    *,
+    model_dir: str | Path | None = None,
+    use_gpu: str = "auto",
+    auto_download: bool = True,
+    max_length: int = 2048,
+    max_parallel_blocks: int = 2,
+    max_pages: int | None = None,
+) -> Document:
+    source = Path(pdf_path)
+    if not source.is_file():
+        raise FileNotFoundError(source)
+    try:
+        from openocr import OpenOCR
+    except ImportError as exc:
+        raise RuntimeError(
+            "OpenDoc requires openocr-python==0.1.5. Install the project requirements first."
+        ) from exc
+
+    base_dir = (
+        Path(model_dir)
+        if model_dir is not None
+        else Path(__file__).resolve().parent / "models" / "opendoc"
+    )
+    base_dir.mkdir(parents=True, exist_ok=True)
+    gpu_value: bool | None
+    if use_gpu == "auto":
+        gpu_value = None
+    elif use_gpu == "true":
+        gpu_value = True
+    elif use_gpu == "false":
+        gpu_value = False
+    else:
+        raise ValueError("use_gpu must be one of: auto, true, false")
+
+    parser = OpenOCR(
+        task="doc",
+        layout_model_path=str(base_dir / "PP-DocLayoutV2.onnx"),
+        unirec_encoder_path=str(base_dir / "unirec_encoder.onnx"),
+        unirec_decoder_path=str(base_dir / "unirec_decoder.onnx"),
+        tokenizer_mapping_path=str(base_dir / "unirec_tokenizer_mapping.json"),
+        use_gpu=gpu_value,
+        use_layout_detection=True,
+        use_chart_recognition=False,
+        auto_download=auto_download,
+        max_parallel_blocks=max(1, max_parallel_blocks),
+    )
+    temporary_directory: tempfile.TemporaryDirectory[str] | None = None
+    input_path = source
+    try:
+        if source.suffix.lower() == ".pdf" and max_pages is not None:
+            import fitz
+
+            source_pdf = fitz.open(str(source))
+            if source_pdf.page_count > max_pages:
+                temporary_directory = tempfile.TemporaryDirectory(prefix="opendoc_pdf_")
+                limited_path = Path(temporary_directory.name) / source.name
+                limited_pdf = fitz.open()
+                limited_pdf.insert_pdf(
+                    source_pdf,
+                    from_page=0,
+                    to_page=max(0, max_pages - 1),
+                )
+                limited_pdf.save(str(limited_path))
+                limited_pdf.close()
+                input_path = limited_path
+            source_pdf.close()
+        results = parser(
+            image_path=str(input_path),
+            max_length=max_length,
+            merge_layout_blocks=True,
+        )
+    finally:
+        if temporary_directory is not None:
+            temporary_directory.cleanup()
+    return _document_from_opendoc_results(source, results)
+
+
+def parse_pdf(
+    pdf_path: str | Path,
+    *,
+    password: str | None = None,
+    table_strategy: str = "auto",
+    max_pages: int | None = None,
+    backend: str = "auto",
+    opendoc_model_dir: str | Path | None = None,
+    opendoc_use_gpu: str = "auto",
+    opendoc_auto_download: bool = True,
+    opendoc_max_length: int = 2048,
+    opendoc_max_parallel_blocks: int = 2,
+) -> Document:
+    """Parse a PDF with native extraction, OpenDoc, or automatic OCR fallback."""
+
+    if backend not in {"native", "auto", "opendoc"}:
+        raise ValueError("backend must be one of: native, auto, opendoc")
+    opendoc_options = {
+        "model_dir": opendoc_model_dir,
+        "use_gpu": opendoc_use_gpu,
+        "auto_download": opendoc_auto_download,
+        "max_length": opendoc_max_length,
+        "max_parallel_blocks": opendoc_max_parallel_blocks,
+        "max_pages": max_pages,
+    }
+    if backend == "opendoc":
+        return _parse_pdf_opendoc(pdf_path, **opendoc_options)
+
+    native_document = _parse_pdf_native(
+        pdf_path,
+        password=password,
+        table_strategy=table_strategy,
+        max_pages=max_pages,
+    )
+    native_document.metadata.setdefault("backend", "native")
+    if backend == "native" or native_document.status != "ocr_required":
+        return native_document
+
+    try:
+        opendoc_document = _parse_pdf_opendoc(pdf_path, **opendoc_options)
+        opendoc_document.warnings.insert(
+            0,
+            "Native extraction found no usable text; OpenDoc OCR fallback was used.",
+        )
+        return opendoc_document
+    except Exception as exc:
+        native_document.warnings.append(
+            f"OpenDoc OCR fallback failed: {type(exc).__name__}: {exc}"
+        )
+        return native_document
+
+
 def convert_pdf(
     pdf_path: str | Path,
     output_path: str | Path | None = None,
@@ -864,6 +1114,12 @@ def convert_pdf(
     password: str | None = None,
     table_strategy: str = "auto",
     max_pages: int | None = None,
+    backend: str = "auto",
+    opendoc_model_dir: str | Path | None = None,
+    opendoc_use_gpu: str = "auto",
+    opendoc_auto_download: bool = True,
+    opendoc_max_length: int = 2048,
+    opendoc_max_parallel_blocks: int = 2,
 ) -> tuple[str, Document]:
     """Parse one PDF, render Markdown, and optionally write output artifacts."""
 
@@ -872,6 +1128,12 @@ def convert_pdf(
         password=password,
         table_strategy=table_strategy,
         max_pages=max_pages,
+        backend=backend,
+        opendoc_model_dir=opendoc_model_dir,
+        opendoc_use_gpu=opendoc_use_gpu,
+        opendoc_auto_download=opendoc_auto_download,
+        opendoc_max_length=opendoc_max_length,
+        opendoc_max_parallel_blocks=opendoc_max_parallel_blocks,
     )
     try:
         from .markdown_renderer import render_document
@@ -900,6 +1162,25 @@ def _cli() -> int:
     parser.add_argument("--debug-json", action="store_true", help="Write intermediate document JSON")
     parser.add_argument("--table-strategy", choices=("auto", "strict", "text", "none"), default="auto")
     parser.add_argument("--max-pages", type=int)
+    parser.add_argument(
+        "--backend",
+        choices=("auto", "native", "opendoc"),
+        default="auto",
+        help="auto uses OpenDoc only when native extraction requires OCR",
+    )
+    parser.add_argument(
+        "--opendoc-model-dir",
+        type=Path,
+        default=Path(__file__).resolve().parent / "models" / "opendoc",
+    )
+    parser.add_argument(
+        "--opendoc-use-gpu",
+        choices=("auto", "true", "false"),
+        default="auto",
+    )
+    parser.add_argument("--opendoc-no-auto-download", action="store_true")
+    parser.add_argument("--opendoc-max-length", type=int, default=2048)
+    parser.add_argument("--opendoc-max-parallel-blocks", type=int, default=2)
     args = parser.parse_args()
 
     inputs = sorted(args.input.glob("*.pdf")) if args.input.is_dir() else [args.input]
@@ -916,6 +1197,12 @@ def _cli() -> int:
                 debug_json_path=debug_path,
                 table_strategy=args.table_strategy,
                 max_pages=args.max_pages,
+                backend=args.backend,
+                opendoc_model_dir=args.opendoc_model_dir,
+                opendoc_use_gpu=args.opendoc_use_gpu,
+                opendoc_auto_download=not args.opendoc_no_auto_download,
+                opendoc_max_length=args.opendoc_max_length,
+                opendoc_max_parallel_blocks=args.opendoc_max_parallel_blocks,
             )
             print(f"{pdf_path.name}: {document.status} -> {output_path}")
         except Exception as exc:

@@ -15,6 +15,7 @@ from pdf_to_markdown import (
     Document,
     Page,
     _canonical_margin_text,
+    _document_from_opendoc_results,
     _heading_level,
     _is_bold,
 )
@@ -94,6 +95,59 @@ class RendererTests(unittest.TestCase):
         self.assertIsNone(_heading_level(date, 10.0))
         self.assertIsNone(_heading_level(affiliation, 10.0))
         self.assertEqual(_heading_level(section, 10.0), 2)
+
+    def test_opendoc_results_keep_markdown_and_heading_structure(self) -> None:
+        results = {
+            "width": 1200,
+            "height": 1600,
+            "recognition_results": [
+                {
+                    "label": "doc_title",
+                    "bbox": [100, 100, 1100, 180],
+                    "score": 0.98,
+                    "text": "OCR Paper",
+                },
+                {
+                    "label": "text",
+                    "bbox": [100, 220, 1100, 400],
+                    "score": 0.95,
+                    "text": "An inline formula: $x^2$.",
+                },
+                {
+                    "label": "paragraph_title",
+                    "bbox": [100, 410, 1100, 440],
+                    "score": 0.96,
+                    "text": "Abstract",
+                },
+                {
+                    "label": "abstract",
+                    "bbox": [100, 440, 1100, 448],
+                    "score": 0.94,
+                    "text": "Abstract: OCR abstract body.",
+                },
+                {
+                    "label": "table",
+                    "bbox": [100, 450, 1100, 800],
+                    "score": 0.92,
+                    "text": "| A | B |\n| --- | --- |\n| 1 | 2 |",
+                },
+                {
+                    "label": "footer",
+                    "bbox": [100, 1500, 1100, 1560],
+                    "score": 0.99,
+                    "text": "Ignored footer",
+                },
+            ],
+        }
+        document = _document_from_opendoc_results(Path("ocr.pdf"), results)
+        markdown = render_document(document)
+        self.assertEqual(document.metadata["backend"], "opendoc")
+        self.assertIn("# OCR Paper", markdown)
+        self.assertIn("$x^2$", markdown)
+        self.assertEqual(markdown.count("## Abstract"), 1)
+        self.assertIn("OCR abstract body.", markdown)
+        self.assertIn("| A | B |", markdown)
+        self.assertNotIn("Ignored footer", markdown)
 
 
 if __name__ == "__main__":

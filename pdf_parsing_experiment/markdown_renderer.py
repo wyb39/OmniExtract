@@ -102,6 +102,10 @@ def render_document(document: Any) -> str:
                 )
                 if value:
                     parts.append(value)
+            elif block.kind == "raw_markdown":
+                value = block.text.strip()
+                if value:
+                    parts.append(value)
 
     markdown = "\n\n".join(part.rstrip() for part in parts if part.strip())
     markdown = re.sub(r"\n{3,}", "\n\n", markdown).strip()

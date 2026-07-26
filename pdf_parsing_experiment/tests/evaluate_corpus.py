@@ -24,6 +24,7 @@ def main() -> int:
     parser.add_argument("--max-pages", type=int)
     parser.add_argument("--debug-json", action="store_true")
     parser.add_argument("--table-strategy", choices=("auto", "strict", "text", "none"), default="auto")
+    parser.add_argument("--backend", choices=("native", "auto", "opendoc"), default="native")
     args = parser.parse_args()
 
     pdfs = sorted(args.input.glob("*.pdf"))
@@ -43,6 +44,7 @@ def main() -> int:
                 debug_json_path=debug_path,
                 table_strategy=args.table_strategy,
                 max_pages=args.max_pages,
+                backend=args.backend,
             )
             blocks = [block for page in document.pages for block in page.blocks]
             entry.update(

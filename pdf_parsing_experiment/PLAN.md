@@ -2,7 +2,7 @@
 
 ## 1. 目标
 
-基于 `pypdf` 和 `pdfplumber` 构建面向 LLM 的 PDF 到 Markdown 解析流程。
+基于 `pypdf`、`pdfplumber` 和 OpenDoc 构建面向 LLM 的 PDF 到 Markdown 解析流程。
 
 输出应尽量接近 `src/articleUtil.py` 当前支持的 Markdown 结构，并满足：
 
@@ -33,10 +33,12 @@
 - 表格单元格中的换行统一为 `<br>`。
 - 不猜测缺失的单元格内容；无法可靠恢复时保留空值并记录低置信度。
 
-### 2.3 非目标
+### 2.3 OCR 边界
 
-- 第一阶段不实现 OCR。
-- 对纯扫描 PDF 返回明确的 `ocr_required` 状态。
+- 原生提取无法获得文本时，使用 OpenDoc OCR 回退。
+- 支持显式强制使用 OpenDoc 解析整份文档。
+- OpenDoc 失败时保留明确的 `ocr_required` 状态和失败原因。
+- 不因局部字体编码异常而默认 OCR 整份机器生成 PDF。
 - 第一阶段不重建复杂公式；先保留可提取文本和原始字符顺序。
 
 ## 3. 精简架构
@@ -57,7 +59,7 @@ pdf_parsing_experiment/
 核心实现只保留两个文件：
 
 - `pdf_to_markdown.py`：公开 API 和 CLI、`pypdf` 元数据/文本回退、`pdfplumber`
-  字符与表格抽取、阅读顺序、页眉页脚过滤、标题和段落识别。
+  字符与表格抽取、阅读顺序、页眉页脚过滤、标题和段落识别，以及 OpenDoc OCR 适配。
 - `markdown_renderer.py`：将轻量中间结果渲染为 Markdown，负责粗体、标题、列表、
   GFM 表格和 HTML 复杂表格。
 
@@ -67,12 +69,12 @@ pdf_parsing_experiment/
 
 ## 4. 轻量中间模型
 
-先将两个解析器的结果归一化，再生成 Markdown：
+先将原生提取与 OpenDoc 后端的结果归一化，再生成 Markdown：
 
 ```text
 Document
 └── Page
-    └── Block（text / heading / list / table）
+    └── Block（text / heading / list / table / raw_markdown）
 ```
 
 模型直接定义在 `pdf_to_markdown.py` 中，只保留渲染和调试实际需要的字段：
@@ -117,6 +119,7 @@ Document
    - 线条、矩形和图片区域
    - 候选表格和单元格
 3. 归一化为 `Document -> Page -> Block`，并可选输出调试 JSON。
+4. 原生文本不足时调用 OpenDoc；保留 OpenDoc 标签、边界框和置信度。
 
 ### 阶段 C：版面和阅读顺序
 
@@ -180,7 +183,7 @@ Document
 - 基准表格不存在整体错列、重复提取或正文混入。
 - 复杂表格使用 HTML 后能够保留表头和合并单元格结构。
 - 输出能够直接被现有 `ParsedMarkdown` 和 `convert_md_to_json` 使用。
-- 扫描 PDF 不产生误导性空 Markdown，而是返回明确的 OCR 状态。
+- 扫描 PDF 通过 OpenDoc 输出 Markdown；失败时返回明确的 OCR 状态。
 
 ## 7. 当前执行顺序
 
@@ -202,20 +205,23 @@ Document
 - 轻量 `Document -> Page -> Block` 模型及调试 JSON。
 - 双栏阅读顺序、跨栏区段、重复页眉页脚、段落和断词处理。
 - H1 文档标题、H2/H3 章节、粗体、列表、GFM/HTML 表格渲染。
-- 扫描文档 `ocr_required` 状态。
+- `native`、`opendoc` 和 `auto` 三种解析模式。
+- OpenDoc 扫描文档解析、Markdown 适配和自动 OCR 回退。
 - 独立单元测试和全语料评估脚本。
 
 验证记录：
 
-- 单元测试 4 项全部通过。
+- 单元测试 5 项全部通过。
 - `test_pdfs/` 的 31 份文件各取前 5 页完成兼容测试，0 个解析异常。
 - 最新代码对 31 份文件各取前 2 页再次回归，0 个解析异常；30 份为 `ok`，
   `DAA.pdf` 为预期的 `ocr_required`。
 - 已将代表性双栏论文首页渲染为 PNG，对照修正 Abstract、Keywords、章节与双栏正文顺序。
+- OpenDoc CPU 模式成功解析 `DAA.pdf` 扫描页，自动回退后状态为 `ok`，
+  保留中英文标题、正文和章节层级。
 
 进入 `src` 前仍需完成：
 
 - 扩充表格真值与跨页表格用例。
 - 抑制没有可靠边界的矢量图坐标轴标签。
 - 与 Marker 输出做可量化结构对比。
-- 为公式和 OCR 设计明确的后续处理接口。
+- 扩充 OpenDoc 表格、公式和多页扫描文档回归样本。

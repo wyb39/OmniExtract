@@ -8,10 +8,11 @@ See [PLAN.md](PLAN.md) for the detailed implementation plan, output contract, ar
 
 1. Accept a PDF input and collect document metadata.
 2. Extract page text and layout-aware text blocks with `pypdf` and `pdfplumber`.
-3. Detect tables, images, headers, footers, and page boundaries.
-4. Normalize the result into a lightweight `Document -> Page -> Block` model.
-5. Add fixtures and comparison checks for representative PDFs.
-6. Move the validated implementation into the appropriate `src` module.
+3. Fall back to OpenDoc OCR when the native text layer is absent, or use OpenDoc explicitly.
+4. Detect tables, images, headers, footers, and page boundaries.
+5. Normalize the result into a lightweight `Document -> Page -> Block` model.
+6. Add fixtures and comparison checks for representative PDFs.
+7. Move the validated implementation into the appropriate `src` module.
 
 ## Development boundary
 
@@ -34,6 +35,7 @@ markdown, document = convert_pdf(
     "input.pdf",
     "output.md",
     debug_json_path="output.debug.json",
+    backend="auto",
 )
 ```
 
@@ -45,6 +47,33 @@ Command line:
   --output pdf_parsing_experiment\tests\output `
   --debug-json
 ```
+
+Parser backends:
+
+```powershell
+# Native extraction, with OpenDoc only when OCR is required
+.\.venv\Scripts\python.exe pdf_parsing_experiment\pdf_to_markdown.py `
+  input.pdf --backend auto --output output
+
+# Force OpenDoc for every page
+.\.venv\Scripts\python.exe pdf_parsing_experiment\pdf_to_markdown.py `
+  input.pdf --backend opendoc --output output
+
+# Do not download models during execution
+.\.venv\Scripts\python.exe pdf_parsing_experiment\pdf_to_markdown.py `
+  input.pdf --backend opendoc --opendoc-no-auto-download
+```
+
+OpenDoc uses `openocr-python==0.1.5`. Its four required model files are stored
+under `models/opendoc/` and ignored by Git:
+
+- `PP-DocLayoutV2.onnx`
+- `unirec_encoder.onnx`
+- `unirec_decoder.onnx`
+- `unirec_tokenizer_mapping.json`
+
+The models total approximately 943 MB. The current installed ONNX Runtime exposes
+the CPU provider; `--opendoc-use-gpu false` forces that tested path.
 
 Regression checks:
 
@@ -61,7 +90,9 @@ ignored by Git.
 
 ## Current limits
 
-- Scanned PDFs return `ocr_required`; OCR is intentionally outside this prototype.
+- `auto` invokes OpenDoc only when native extraction returns `ocr_required`; it
+  does not OCR every machine-generated PDF.
+- OpenDoc processes rasterized pages, so OCR is slower than native extraction.
 - Vector chart labels can still enter the text stream because PDF figures do not
   always expose a reliable image boundary.
 - Formula reconstruction and cross-page table merging are not implemented yet.
@@ -73,6 +104,7 @@ ignored by Git.
 - [x] Define the lightweight intermediate document model in `pdf_to_markdown.py`.
 - [x] Implement `pypdf` fallback and `pdfplumber` layout/table extraction together.
 - [x] Implement Markdown and table rendering in `markdown_renderer.py`.
+- [x] Add OpenDoc parsing and automatic OCR fallback.
 - [ ] Compare results against the current parser.
 - [x] Add regression tests and corpus evaluation.
 - [ ] Move the validated components into `src` and update callers.
