@@ -24,7 +24,11 @@ def main() -> int:
     parser.add_argument("--max-pages", type=int)
     parser.add_argument("--debug-json", action="store_true")
     parser.add_argument("--table-strategy", choices=("auto", "strict", "text", "none"), default="auto")
-    parser.add_argument("--backend", choices=("native", "auto", "opendoc"), default="native")
+    parser.add_argument(
+        "--backend",
+        choices=("native", "auto", "hybrid", "opendoc"),
+        default="native",
+    )
     args = parser.parse_args()
 
     pdfs = sorted(args.input.glob("*.pdf"))
@@ -47,13 +51,18 @@ def main() -> int:
                 backend=args.backend,
             )
             blocks = [block for page in document.pages for block in page.blocks]
+            rendered_tables = sum(
+                block.kind == "table"
+                or (block.kind == "raw_markdown" and "<table" in block.text.lower())
+                for block in blocks
+            )
             entry.update(
                 {
                     "status": document.status,
                     "pages": len(document.pages),
                     "markdown_chars": len(markdown),
                     "headings": sum(block.kind == "heading" for block in blocks),
-                    "tables": sum(block.kind == "table" for block in blocks),
+                    "tables": rendered_tables,
                     "warnings": document.warnings,
                 }
             )

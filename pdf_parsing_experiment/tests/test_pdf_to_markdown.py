@@ -18,6 +18,12 @@ from pdf_to_markdown import (
     _document_from_opendoc_results,
     _heading_level,
     _is_bold,
+    _layout_bbox_to_pdf,
+    _layout_native_needs_recognition,
+    _native_blocks_for_layout_region,
+    _native_table_is_plausible,
+    _normalize_layout_heading,
+    _run_opendoc_layout,
 )
 
 
@@ -148,6 +154,136 @@ class RendererTests(unittest.TestCase):
         self.assertIn("OCR abstract body.", markdown)
         self.assertIn("| A | B |", markdown)
         self.assertNotIn("Ignored footer", markdown)
+
+    def test_layout_coordinates_and_native_style_mapping(self) -> None:
+        self.assertEqual(
+            _layout_bbox_to_pdf(
+                (100, 200, 600, 800),
+                page_width=600,
+                page_height=800,
+                image_width=1200,
+                image_height=1600,
+            ),
+            (50.0, 100.0, 300.0, 400.0),
+        )
+        chars = []
+        x = 10.0
+        for character in "Hybrid Title":
+            width = 3.0 if character == " " else 6.0
+            chars.append(
+                {
+                    "text": character,
+                    "x0": x,
+                    "x1": x + width,
+                    "top": 20.0,
+                    "bottom": 32.0,
+                    "size": 12.0,
+                    "fontname": "Arial-Bold",
+                }
+            )
+            x += width
+        blocks = _native_blocks_for_layout_region(
+            label="doc_title",
+            bbox=(10, 20, 200, 40),
+            chars=chars,
+            page_width=600,
+            body_size=10.0,
+            confidence=0.95,
+        )
+        self.assertEqual(len(blocks), 1)
+        self.assertEqual(blocks[0].kind, "heading")
+        self.assertEqual(blocks[0].level, 1)
+        self.assertEqual(blocks[0].source, "layout-native")
+        self.assertGreater(blocks[0].bold_ratio, 0.9)
+
+    def test_layout_heading_and_native_table_filters(self) -> None:
+        self.assertEqual(_normalize_layout_heading("a b s t r a c t"), "Abstract")
+        self.assertEqual(_normalize_layout_heading("a r t i c l e i n f o"), "ARTICLE INFO")
+        self.assertEqual(_normalize_layout_heading("Thermal properties"), "Thermal properties")
+
+        data_table = Block(
+            kind="table",
+            bbox=(50, 100, 550, 220),
+            rows=[
+                ["Spot", "01", "02", "03"],
+                ["Fe %", "100", "79", "92"],
+                ["Y %", "0", "10", "8"],
+            ],
+            confidence=0.9,
+        )
+        prose_table = Block(
+            kind="table",
+            bbox=(20, 100, 580, 650),
+            rows=[
+                ["Long two-column paragraph " * 3, "Another paragraph " * 4]
+                for _ in range(10)
+            ],
+            confidence=0.95,
+        )
+        self.assertTrue(
+            _native_table_is_plausible(
+                data_table,
+                page_width=600,
+                page_height=800,
+                chart_overlap=0.0,
+            )
+        )
+        self.assertFalse(
+            _native_table_is_plausible(
+                prose_table,
+                page_width=600,
+                page_height=800,
+                chart_overlap=0.0,
+            )
+        )
+        corrupt_title = Block(
+            kind="heading",
+            bbox=(0, 0, 100, 20),
+            text="Oxidation of a CueZr-based alloy",
+        )
+        self.assertTrue(
+            _layout_native_needs_recognition("doc_title", [corrupt_title])
+        )
+        self.assertFalse(
+            _layout_native_needs_recognition("text", [corrupt_title])
+        )
+
+    def test_layout_adapter_repairs_799_pixel_tensor(self) -> None:
+        import numpy as np
+
+        class FakeSession:
+            input_shape = None
+
+            def run(self, output_names, input_dict):
+                self.input_shape = input_dict["image"].shape
+                return [np.empty((0, 8), dtype=np.float32)]
+
+        class FakeDetector:
+            output_names = ["boxes"]
+            session = FakeSession()
+
+            def preprocess(self, image):
+                return (
+                    {
+                        "image": np.zeros((1, 3, 800, 799), dtype=np.float32),
+                        "im_shape": np.array([[800, 800]], dtype=np.float32),
+                        "scale_factor": np.array([[8.0, 6.0]], dtype=np.float32),
+                    },
+                    (8.0, 6.0),
+                    image.shape[0],
+                    image.shape[1],
+                )
+
+            def postprocess(self, image, outputs, scale, height, width):
+                return {"boxes": [], "size": [height, width]}
+
+        detector = FakeDetector()
+        result = _run_opendoc_layout(
+            detector,
+            np.zeros((100, 133, 3), dtype=np.uint8),
+        )
+        self.assertEqual(detector.session.input_shape, (1, 3, 800, 800))
+        self.assertEqual(result["size"], [100, 133])
 
 
 if __name__ == "__main__":

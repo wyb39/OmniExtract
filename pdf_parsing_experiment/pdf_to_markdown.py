@@ -12,8 +12,9 @@ import json
 import math
 import re
 import tempfile
+import time
 from collections import Counter
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from difflib import SequenceMatcher
 from pathlib import Path
 from statistics import median
@@ -38,6 +39,8 @@ class Block:
     level: int | None = None
     confidence: float = 1.0
     complex_table: bool = False
+    source: str = ""
+    label: str = ""
 
 
 @dataclass
@@ -72,6 +75,23 @@ _SECTION_RE = re.compile(
 _NUMBERED_HEADING_RE = re.compile(
     r"^\s*(?:\d+\.|\d+\.\d+(?:\.\d+){0,3}\.?)\s+[A-Z][A-Za-z]"
 )
+_LAYOUT_IGNORED_LABELS = {
+    "aside_text",
+    "chart",
+    "footer",
+    "footer_image",
+    "footnote",
+    "header",
+    "header_image",
+    "image",
+    "number",
+    "seal",
+    "vision_footnote",
+}
+_LAYOUT_FORMULA_LABELS = {"display_formula", "inline_formula", "formula_number"}
+_LAYOUT_HEADING_LABELS = {"doc_title", "paragraph_title", "reference"}
+_LAYOUT_DETECTOR_CACHE: dict[tuple[str, str], Any] = {}
+_SELECTIVE_RECOGNIZER_CACHE: dict[tuple[str, str, int], Any] = {}
 
 
 def _clean_text(text: str) -> str:
@@ -181,6 +201,8 @@ def _extract_tables(page: Any, strategy: str = "auto") -> list[Block]:
                 rows=rows,
                 confidence=min(1.0, 0.45 + score / 80),
                 complex_table=complex_table,
+                source="native-table",
+                label="table",
             )
             candidates.append((score, block))
 
@@ -502,6 +524,8 @@ def _build_blocks(
                 bbox=bbox,
                 font_size=median(line["font_size"] for line in paragraph_lines),
                 bold_ratio=bold_ratio,
+                source="native",
+                label="text",
             )
         )
         paragraph_lines.clear()
@@ -527,6 +551,8 @@ def _build_blocks(
                     bold_ratio=item["bold_ratio"],
                     level=2,
                     confidence=0.9,
+                    source="native",
+                    label="paragraph_title",
                 )
             )
             blocks.append(
@@ -536,6 +562,8 @@ def _build_blocks(
                     runs=[{"text": content, "bold": False}],
                     bbox=item["bbox"],
                     font_size=item["font_size"],
+                    source="native",
+                    label="abstract",
                 )
             )
             previous_line = None
@@ -553,6 +581,8 @@ def _build_blocks(
                     bold_ratio=item["bold_ratio"],
                     level=level,
                     confidence=0.75 if level > 1 else 0.9,
+                    source="native",
+                    label="doc_title" if level == 1 else "paragraph_title",
                 )
             )
             previous_line = None
@@ -567,6 +597,8 @@ def _build_blocks(
                     bbox=item["bbox"],
                     font_size=item["font_size"],
                     bold_ratio=item["bold_ratio"],
+                    source="native",
+                    label="text",
                 )
             )
             previous_line = None
@@ -869,6 +901,813 @@ def _opendoc_bbox(value: Any) -> BBox:
     return (0.0, 0.0, 0.0, 0.0)
 
 
+def _opendoc_gpu_value(use_gpu: str) -> bool | None:
+    if use_gpu == "auto":
+        return None
+    if use_gpu == "true":
+        return True
+    if use_gpu == "false":
+        return False
+    raise ValueError("use_gpu must be one of: auto, true, false")
+
+
+def _opendoc_model_base(model_dir: str | Path | None) -> Path:
+    base_dir = (
+        Path(model_dir)
+        if model_dir is not None
+        else Path(__file__).resolve().parent / "models" / "opendoc"
+    )
+    base_dir.mkdir(parents=True, exist_ok=True)
+    return base_dir
+
+
+def _get_opendoc_layout_detector(
+    model_dir: str | Path | None,
+    use_gpu: str,
+    auto_download: bool,
+) -> Any:
+    """Load and cache PP-DocLayoutV2 without loading UniRec."""
+
+    try:
+        from openocr.tools.infer_doc_onnx import LayoutDetectorONNX
+    except ImportError as exc:
+        raise RuntimeError(
+            "Hybrid parsing requires openocr-python==0.1.5."
+        ) from exc
+
+    base_dir = _opendoc_model_base(model_dir)
+    cache_key = (str(base_dir.resolve()), use_gpu)
+    detector = _LAYOUT_DETECTOR_CACHE.get(cache_key)
+    if detector is None:
+        detector = LayoutDetectorONNX(
+            str(base_dir / "PP-DocLayoutV2.onnx"),
+            use_gpu=_opendoc_gpu_value(use_gpu),
+            threshold=0.5,
+            auto_download=auto_download,
+        )
+        _LAYOUT_DETECTOR_CACHE[cache_key] = detector
+    return detector
+
+
+def _get_selective_opendoc_recognizer(
+    model_dir: str | Path | None,
+    use_gpu: str,
+    auto_download: bool,
+    max_parallel_blocks: int,
+) -> Any:
+    """Load and cache UniRec without creating a second layout detector."""
+
+    try:
+        from openocr.tools.infer_doc_onnx import OpenDocONNX
+    except ImportError as exc:
+        raise RuntimeError(
+            "Selective recognition requires openocr-python==0.1.5."
+        ) from exc
+
+    base_dir = _opendoc_model_base(model_dir)
+    workers = max(1, max_parallel_blocks)
+    cache_key = (str(base_dir.resolve()), use_gpu, workers)
+    recognizer = _SELECTIVE_RECOGNIZER_CACHE.get(cache_key)
+    if recognizer is None:
+        recognizer = OpenDocONNX(
+            unirec_encoder_path=str(base_dir / "unirec_encoder.onnx"),
+            unirec_decoder_path=str(base_dir / "unirec_decoder.onnx"),
+            tokenizer_mapping_path=str(base_dir / "unirec_tokenizer_mapping.json"),
+            use_gpu=_opendoc_gpu_value(use_gpu),
+            use_layout_detection=False,
+            use_chart_recognition=False,
+            auto_download=auto_download,
+            max_parallel_blocks=workers,
+        )
+        _SELECTIVE_RECOGNIZER_CACHE[cache_key] = recognizer
+    return recognizer
+
+
+def _render_fitz_page(page: Any) -> Any:
+    """Render a page exactly as the installed OpenDoc PDF adapter does."""
+
+    import cv2
+    import numpy as np
+    from PIL import Image
+
+    import fitz
+
+    pixmap = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
+    if pixmap.width > 2000 or pixmap.height > 2000:
+        pixmap = page.get_pixmap(matrix=fitz.Matrix(1, 1), alpha=False)
+    image = Image.frombytes("RGB", [pixmap.width, pixmap.height], pixmap.samples)
+    return cv2.cvtColor(np.asarray(image), cv2.COLOR_RGB2BGR)
+
+
+def _run_opendoc_layout(detector: Any, image: Any) -> dict[str, Any]:
+    """Run layout with an exact 800x800 tensor.
+
+    openocr-python 0.1.5 calculates the resize dimensions through floating-point
+    multiplication and can truncate one side to 799 for some aspect ratios.
+    PP-DocLayoutV2 has a fixed 800x800 input, so normalize the tensor here.
+    """
+
+    import cv2
+    import numpy as np
+
+    input_dict, scale, original_height, original_width = detector.preprocess(image)
+    if tuple(input_dict["image"].shape[-2:]) != (800, 800):
+        resized = cv2.resize(image, (800, 800), interpolation=cv2.INTER_LINEAR)
+        resized_rgb = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
+        input_dict = {
+            "im_shape": np.array([[800, 800]], dtype=np.float32),
+            "image": (
+                resized_rgb.astype(np.float32).transpose(2, 0, 1)[np.newaxis, ...]
+                / 255.0
+            ),
+            "scale_factor": np.array(
+                [[800 / original_height, 800 / original_width]],
+                dtype=np.float32,
+            ),
+        }
+        scale = (800 / original_height, 800 / original_width)
+    outputs = detector.session.run(detector.output_names, input_dict)
+    return detector.postprocess(
+        image,
+        outputs,
+        scale,
+        original_height,
+        original_width,
+    )
+
+
+def _layout_bbox_to_pdf(
+    bbox: BBox,
+    *,
+    page_width: float,
+    page_height: float,
+    image_width: float,
+    image_height: float,
+) -> BBox:
+    """Convert OpenDoc raster coordinates to pdfplumber page coordinates."""
+
+    scale_x = page_width / max(image_width, 1.0)
+    scale_y = page_height / max(image_height, 1.0)
+    return (
+        max(0.0, min(page_width, bbox[0] * scale_x)),
+        max(0.0, min(page_height, bbox[1] * scale_y)),
+        max(0.0, min(page_width, bbox[2] * scale_x)),
+        max(0.0, min(page_height, bbox[3] * scale_y)),
+    )
+
+
+def _bbox_intersection_ratio(first: BBox, second: BBox) -> float:
+    """Intersection divided by the smaller box area."""
+
+    x0, top = max(first[0], second[0]), max(first[1], second[1])
+    x1, bottom = min(first[2], second[2]), min(first[3], second[3])
+    intersection = max(0.0, x1 - x0) * max(0.0, bottom - top)
+    first_area = max(0.0, first[2] - first[0]) * max(0.0, first[3] - first[1])
+    second_area = max(0.0, second[2] - second[0]) * max(0.0, second[3] - second[1])
+    return intersection / max(min(first_area, second_area), 1.0)
+
+
+def _visible_character_count(chars: Iterable[dict[str, Any]]) -> int:
+    return sum(
+        sum(not character.isspace() for character in str(char.get("text", "")))
+        for char in chars
+    )
+
+
+def _merge_layout_lines(lines: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Merge native lines inside one OpenDoc region while preserving bold runs."""
+
+    if not lines:
+        return None
+    text = ""
+    runs: list[dict[str, Any]] = []
+    for index, line in enumerate(lines):
+        line_text = line["text"]
+        dehyphenate = bool(index and text.endswith("-") and line_text[:1].islower())
+        if dehyphenate:
+            text = text[:-1]
+            if runs:
+                runs[-1]["text"] = runs[-1]["text"].rstrip("-")
+            separator = ""
+        else:
+            separator = " " if index else ""
+            text += separator
+        text += line_text
+        _merge_runs(runs, line["runs"], separator)
+    total_chars = sum(max(len(line["text"]), 1) for line in lines)
+    return {
+        "text": _clean_text(text),
+        "runs": runs,
+        "font_size": median(line["font_size"] for line in lines),
+        "bold_ratio": sum(
+            line["bold_ratio"] * max(len(line["text"]), 1) for line in lines
+        )
+        / max(total_chars, 1),
+    }
+
+
+def _layout_heading_level(text: str, label: str, body_size: float, merged: dict[str, Any]) -> int:
+    if label == "doc_title":
+        return 1
+    probe = {
+        "text": text,
+        "runs": merged.get("runs", []),
+        "bbox": (0.0, 0.0, 0.0, 0.0),
+        "font_size": float(merged.get("font_size", body_size) or body_size),
+        "bold_ratio": float(merged.get("bold_ratio", 0.0) or 0.0),
+    }
+    return _heading_level(probe, body_size) or 2
+
+
+def _normalize_layout_heading(text: str) -> str:
+    """Collapse letter-spaced journal headings without altering normal titles."""
+
+    value = _clean_text(text)
+    compact = re.sub(r"[^a-z]", "", value.casefold())
+    known = {
+        "abstract": "Abstract",
+        "articleinfo": "ARTICLE INFO",
+        "acknowledgments": "Acknowledgments",
+        "acknowledgements": "Acknowledgements",
+        "references": "References",
+    }
+    single_letter_tokens = [
+        token for token in re.split(r"\s+", value) if token and token.isalpha()
+    ]
+    if compact in known and len(single_letter_tokens) >= 3 and all(
+        len(token) == 1 for token in single_letter_tokens
+    ):
+        return known[compact]
+    return value
+
+
+def _native_blocks_for_layout_region(
+    *,
+    label: str,
+    bbox: BBox,
+    chars: list[dict[str, Any]],
+    page_width: float,
+    body_size: float,
+    confidence: float,
+    source: str = "layout-native",
+) -> list[Block]:
+    lines = _chars_to_lines(chars, page_width)
+    merged = _merge_layout_lines(lines)
+    if not merged or not merged["text"]:
+        return []
+
+    text = (
+        _normalize_layout_heading(merged["text"])
+        if label in _LAYOUT_HEADING_LABELS
+        else merged["text"]
+    )
+    heading_runs = merged["runs"] if text == merged["text"] else []
+    common = {
+        "bbox": bbox,
+        "font_size": merged["font_size"],
+        "bold_ratio": merged["bold_ratio"],
+        "confidence": confidence,
+        "source": source,
+        "label": label,
+    }
+    if label in _LAYOUT_HEADING_LABELS:
+        return [
+            Block(
+                kind="heading",
+                text=text,
+                runs=heading_runs,
+                level=_layout_heading_level(text, label, body_size, merged),
+                **common,
+            )
+        ]
+    if label == "abstract":
+        abstract_text = re.sub(
+            r"^\s*abstract\s*[:.-]?\s*", "", text, flags=re.IGNORECASE
+        )
+        blocks = [
+            Block(
+                kind="heading",
+                text="Abstract",
+                level=2,
+                **common,
+            )
+        ]
+        if abstract_text:
+            blocks.append(
+                Block(
+                    kind="paragraph",
+                    text=abstract_text,
+                    runs=merged["runs"] if abstract_text == text else [],
+                    **common,
+                )
+            )
+        return blocks
+    kind = "list" if _LIST_RE.match(text) else "paragraph"
+    return [
+        Block(
+            kind=kind,
+            text=text,
+            runs=merged["runs"],
+            **common,
+        )
+    ]
+
+
+def _recognized_blocks_for_layout_region(
+    *,
+    label: str,
+    bbox: BBox,
+    text: str,
+    confidence: float,
+) -> list[Block]:
+    value = text.strip()
+    if not value:
+        return []
+    common = {
+        "bbox": bbox,
+        "confidence": confidence,
+        "source": "layout-unirec",
+        "label": label,
+    }
+    if label == "doc_title":
+        return [Block(kind="heading", text=_clean_text(value), level=1, **common)]
+    if label in {"paragraph_title", "reference"}:
+        return [Block(kind="heading", text=_clean_text(value), level=2, **common)]
+    if label == "abstract":
+        abstract_text = re.sub(
+            r"^\s*abstract\s*[:.-]?\s*", "", value, flags=re.IGNORECASE
+        )
+        blocks = [Block(kind="heading", text="Abstract", level=2, **common)]
+        if abstract_text:
+            blocks.append(Block(kind="raw_markdown", text=abstract_text, **common))
+        return blocks
+    return [Block(kind="raw_markdown", text=value, **common)]
+
+
+def _layout_native_needs_recognition(label: str, blocks: list[Block]) -> bool:
+    """OCR critical headings when their native font mapping is visibly corrupt."""
+
+    if label not in _LAYOUT_HEADING_LABELS or not blocks:
+        return False
+    text = " ".join(block.text for block in blocks)
+    chemical_dash_as_e = re.search(r"\b[A-Z][a-z]?e[A-Z][a-z]?\b", text)
+    return "(cid:" in text or chemical_dash_as_e is not None
+
+
+def _native_table_is_plausible(
+    table: Block,
+    *,
+    page_width: float,
+    page_height: float,
+    chart_overlap: float,
+) -> bool:
+    rows = table.rows
+    row_count = len(rows)
+    column_count = max((len(row) for row in rows), default=0)
+    nonempty = [cell for row in rows for cell in row if cell.strip()]
+    if row_count < 2 or column_count < 2 or len(nonempty) < 4:
+        return False
+    average_length = sum(len(cell) for cell in nonempty) / len(nonempty)
+    numeric_ratio = sum(bool(re.search(r"\d", cell)) for cell in nonempty) / len(nonempty)
+    height_ratio = (table.bbox[3] - table.bbox[1]) / max(page_height, 1.0)
+    width_ratio = (table.bbox[2] - table.bbox[0]) / max(page_width, 1.0)
+    strong_grid = row_count >= 3 and column_count >= 3 and numeric_ratio >= 0.20
+    if height_ratio > 0.30 and average_length > 24:
+        return False
+    if row_count >= 8 and average_length > 30:
+        return False
+    if width_ratio > 0.88 and height_ratio > 0.22 and average_length > 28:
+        return False
+    if chart_overlap > 0.25 and not strong_grid:
+        return False
+    return strong_grid or (
+        table.confidence >= 0.70
+        and average_length <= 24
+        and (numeric_ratio >= 0.15 or row_count <= 6)
+    )
+
+
+def _region_insertion_order(regions: list[dict[str, Any]], bbox: BBox) -> float:
+    for region in regions:
+        region_bbox = region["bbox"]
+        if region_bbox[1] >= bbox[1] - 1.0:
+            return float(region["order"]) - 0.25
+    return float(len(regions)) + 0.25
+
+
+def _crop_layout_region(image: Any, bbox: BBox, label: str) -> Any | None:
+    x0, top, x1, bottom = (int(round(value)) for value in bbox)
+    height, width = image.shape[:2]
+    x0, x1 = max(0, x0), min(width, x1)
+    top, bottom = max(0, top), min(height, bottom)
+    if x1 <= x0 or bottom <= top:
+        return None
+    cropped = image[top:bottom, x0:x1]
+    if cropped.size == 0:
+        return None
+    if label in _LAYOUT_FORMULA_LABELS and label != "formula_number":
+        try:
+            from openocr.tools.infer_doc_onnx import crop_margin
+
+            cropped = crop_margin(cropped)
+        except Exception:
+            pass
+    return cropped
+
+
+def _recognize_layout_tasks(
+    tasks: list[dict[str, Any]],
+    *,
+    model_dir: str | Path | None,
+    use_gpu: str,
+    auto_download: bool,
+    max_length: int,
+    max_parallel_blocks: int,
+) -> list[str]:
+    if not tasks:
+        return []
+    recognizer = _get_selective_opendoc_recognizer(
+        model_dir,
+        use_gpu,
+        auto_download,
+        max_parallel_blocks,
+    )
+    texts = recognizer._parallel_vlm_recognize(
+        [task["image"] for task in tasks],
+        [task["raw_label"] for task in tasks],
+        max_length,
+    )
+    try:
+        from openocr.tools.infer_doc_onnx import convert_otsl_to_html
+    except ImportError:
+        convert_otsl_to_html = None
+    normalized: list[str] = []
+    for task, text in zip(tasks, texts):
+        value = (text or "").strip()
+        if (
+            task["label"] == "table"
+            and value
+            and "<table" not in value.lower()
+            and convert_otsl_to_html is not None
+        ):
+            html_value = convert_otsl_to_html(value)
+            if html_value:
+                value = html_value
+        normalized.append(value)
+    return normalized
+
+
+def _parse_pdf_hybrid(
+    pdf_path: str | Path,
+    *,
+    native_document: Document,
+    password: str | None = None,
+    model_dir: str | Path | None = None,
+    use_gpu: str = "auto",
+    auto_download: bool = True,
+    max_length: int = 2048,
+    max_parallel_blocks: int = 2,
+    max_pages: int | None = None,
+) -> Document:
+    """Use OpenDoc layout for every page and fill regions from native text first."""
+
+    import fitz
+
+    source = Path(pdf_path)
+    detector = _get_opendoc_layout_detector(model_dir, use_gpu, auto_download)
+    body_size = float(native_document.metadata.get("body_font_size", 10.0) or 10.0)
+    warnings = [
+        warning
+        for warning in native_document.warnings
+        if "OCR is required" not in warning
+        and "used pypdf text fallback" not in warning
+    ]
+    pages: list[Page] = []
+    layout_timings: list[float] = []
+    render_timings: list[float] = []
+    recognition_seconds = 0.0
+    source_counts: Counter[str] = Counter()
+    total_native_chars = 0
+    mapped_native_chars = 0
+    total_layout_regions = 0
+    total_ocr_regions = 0
+
+    with fitz.open(str(source)) as fitz_pdf, pdfplumber.open(
+        str(source), password=password
+    ) as plumber_pdf:
+        if fitz_pdf.needs_pass and not fitz_pdf.authenticate(password or ""):
+            raise ValueError(f"Unable to decrypt PDF: {source}")
+        page_limit = min(
+            len(native_document.pages),
+            len(plumber_pdf.pages),
+            fitz_pdf.page_count,
+        )
+        if max_pages is not None:
+            page_limit = min(page_limit, max_pages)
+
+        for page_index in range(page_limit):
+            plumber_page = plumber_pdf.pages[page_index]
+            native_page = native_document.pages[page_index]
+
+            started = time.perf_counter()
+            page_image = _render_fitz_page(fitz_pdf[page_index])
+            render_timings.append(time.perf_counter() - started)
+
+            started = time.perf_counter()
+            layout_result = _run_opendoc_layout(detector, page_image)
+            layout_timings.append(time.perf_counter() - started)
+
+            image_height, image_width = page_image.shape[:2]
+            page_width = float(plumber_page.width)
+            page_height = float(plumber_page.height)
+            regions: list[dict[str, Any]] = []
+            for order, box in enumerate(layout_result.get("boxes", [])):
+                raw_label = str(box.get("label", "text"))
+                label = _base_opendoc_label(raw_label)
+                image_bbox = _opendoc_bbox(box.get("coordinate"))
+                regions.append(
+                    {
+                        "order": order,
+                        "raw_label": raw_label,
+                        "label": label,
+                        "image_bbox": image_bbox,
+                        "bbox": _layout_bbox_to_pdf(
+                            image_bbox,
+                            page_width=page_width,
+                            page_height=page_height,
+                            image_width=float(image_width),
+                            image_height=float(image_height),
+                        ),
+                        "score": float(box.get("score", 1.0) or 0.0),
+                    }
+                )
+            total_layout_regions += len(regions)
+
+            layout_table_regions = [
+                region for region in regions if region["label"] == "table"
+            ]
+            chart_regions = [
+                region
+                for region in regions
+                if region["label"] in {"chart", "image"}
+            ]
+            native_tables = [
+                block for block in native_page.blocks if block.kind == "table"
+            ]
+            accepted_tables: list[Block] = []
+            for table in native_tables:
+                table_overlap = max(
+                    (
+                        _bbox_intersection_ratio(table.bbox, region["bbox"])
+                        for region in layout_table_regions
+                    ),
+                    default=0.0,
+                )
+                chart_overlap = max(
+                    (
+                        _bbox_intersection_ratio(table.bbox, region["bbox"])
+                        for region in chart_regions
+                    ),
+                    default=0.0,
+                )
+                if table_overlap >= 0.20 or _native_table_is_plausible(
+                    table,
+                    page_width=page_width,
+                    page_height=page_height,
+                    chart_overlap=chart_overlap,
+                ):
+                    accepted_tables.append(table)
+
+            table_for_region: dict[int, Block] = {}
+            used_table_ids: set[int] = set()
+            for region in layout_table_regions:
+                matches = [
+                    (
+                        _bbox_intersection_ratio(table.bbox, region["bbox"]),
+                        table,
+                    )
+                    for table in accepted_tables
+                    if id(table) not in used_table_ids
+                ]
+                overlap, table = max(matches, default=(0.0, None), key=lambda item: item[0])
+                if table is not None and overlap >= 0.20:
+                    table_for_region[region["order"]] = table
+                    used_table_ids.add(id(table))
+
+            chars = [
+                char
+                for char in plumber_page.chars
+                if char.get("upright", True)
+                and str(char.get("text", "")).replace("\x00", "").strip()
+            ]
+            total_native_chars += _visible_character_count(chars)
+            assignments: list[list[dict[str, Any]]] = [[] for _ in regions]
+            unassigned_chars: list[dict[str, Any]] = []
+            for char in chars:
+                if any(_inside_bbox(char, table.bbox) for table in accepted_tables):
+                    continue
+                candidate_indices = [
+                    index
+                    for index, region in enumerate(regions)
+                    if _inside_bbox(char, region["bbox"], padding=1.0)
+                ]
+                if not candidate_indices:
+                    unassigned_chars.append(char)
+                    continue
+                selected_index = min(
+                    candidate_indices,
+                    key=lambda index: (
+                        (regions[index]["bbox"][2] - regions[index]["bbox"][0])
+                        * (regions[index]["bbox"][3] - regions[index]["bbox"][1]),
+                        index,
+                    ),
+                )
+                assignments[selected_index].append(char)
+
+            entries: list[tuple[float, Block]] = []
+            recognition_tasks: list[dict[str, Any]] = []
+            for region_index, region in enumerate(regions):
+                label = region["label"]
+                region_chars = assignments[region_index]
+                if label in _LAYOUT_IGNORED_LABELS:
+                    continue
+                if label == "table":
+                    native_table = table_for_region.get(region["order"])
+                    if native_table is not None:
+                        entries.append(
+                            (
+                                float(region["order"]),
+                                replace(
+                                    native_table,
+                                    source="layout-native",
+                                    label="table",
+                                    confidence=min(
+                                        native_table.confidence,
+                                        region["score"],
+                                    ),
+                                ),
+                            )
+                        )
+                        source_counts["layout-native"] += 1
+                        continue
+                native_fallback = _native_blocks_for_layout_region(
+                    label="text" if label in _LAYOUT_FORMULA_LABELS else label,
+                    bbox=region["bbox"],
+                    chars=region_chars,
+                    page_width=page_width,
+                    body_size=body_size,
+                    confidence=region["score"],
+                )
+                needs_recognition = (
+                    label == "table"
+                    or label in _LAYOUT_FORMULA_LABELS
+                    or not native_fallback
+                    or _layout_native_needs_recognition(label, native_fallback)
+                )
+                if needs_recognition:
+                    cropped = _crop_layout_region(
+                        page_image, region["image_bbox"], label
+                    )
+                    if cropped is not None:
+                        recognition_tasks.append(
+                            {
+                                "order": float(region["order"]),
+                                "label": label,
+                                "raw_label": region["raw_label"],
+                                "bbox": region["bbox"],
+                                "score": region["score"],
+                                "image": cropped,
+                                "fallback": native_fallback,
+                            }
+                        )
+                        continue
+                for offset, block in enumerate(native_fallback):
+                    entries.append((float(region["order"]) + offset / 100, block))
+                    source_counts[block.source] += 1
+                mapped_native_chars += _visible_character_count(region_chars)
+
+            unmatched_tables = [
+                table for table in accepted_tables if id(table) not in used_table_ids
+            ]
+            for table in unmatched_tables:
+                entries.append(
+                    (
+                        _region_insertion_order(regions, table.bbox),
+                        replace(table, source="native-table", label="table"),
+                    )
+                )
+                source_counts["native-table"] += 1
+
+            if unassigned_chars:
+                fallback_lines = _chars_to_lines(unassigned_chars, page_width)
+                repeated = set(
+                    native_document.metadata.get("removed_repeated_margins", [])
+                )
+                fallback_lines = [
+                    line
+                    for line in fallback_lines
+                    if _canonical_margin_text(line["text"]) not in repeated
+                ]
+                fallback_blocks = _build_blocks(fallback_lines, body_size, None)
+                for block in fallback_blocks:
+                    block.source = "native-fallback"
+                    block.label = block.label or "text"
+                    entries.append(
+                        (_region_insertion_order(regions, block.bbox), block)
+                    )
+                    source_counts["native-fallback"] += 1
+
+            if recognition_tasks:
+                started = time.perf_counter()
+                try:
+                    recognized_texts = _recognize_layout_tasks(
+                        recognition_tasks,
+                        model_dir=model_dir,
+                        use_gpu=use_gpu,
+                        auto_download=auto_download,
+                        max_length=max_length,
+                        max_parallel_blocks=max_parallel_blocks,
+                    )
+                except Exception as exc:
+                    warnings.append(
+                        f"page {page_index + 1}: selective UniRec failed: "
+                        f"{type(exc).__name__}: {exc}"
+                    )
+                    recognized_texts = [""] * len(recognition_tasks)
+                recognition_seconds += time.perf_counter() - started
+                for task, recognized_text in zip(recognition_tasks, recognized_texts):
+                    recognized_blocks = _recognized_blocks_for_layout_region(
+                        label=task["label"],
+                        bbox=task["bbox"],
+                        text=recognized_text,
+                        confidence=task["score"],
+                    )
+                    selected_blocks = recognized_blocks or task["fallback"]
+                    for offset, block in enumerate(selected_blocks):
+                        entries.append((task["order"] + offset / 100, block))
+                        source_counts[block.source] += 1
+                    if recognized_blocks:
+                        total_ocr_regions += 1
+                    else:
+                        mapped_native_chars += sum(
+                            len(block.text) for block in task["fallback"]
+                        )
+
+            ordered_blocks: list[Block] = []
+            for _, block in sorted(entries, key=lambda item: item[0]):
+                if (
+                    block.kind == "heading"
+                    and ordered_blocks
+                    and ordered_blocks[-1].kind == "heading"
+                    and _clean_text(ordered_blocks[-1].text).casefold()
+                    == _clean_text(block.text).casefold()
+                ):
+                    continue
+                ordered_blocks.append(block)
+            pages.append(
+                Page(
+                    number=page_index + 1,
+                    width=page_width,
+                    height=page_height,
+                    blocks=ordered_blocks,
+                )
+            )
+
+    output_characters = sum(
+        len(block.text) + sum(len(cell) for row in block.rows for cell in row)
+        for page in pages
+        for block in page.blocks
+    )
+    status = "ok" if output_characters >= max(50, len(pages) * 10) else "ocr_required"
+    if status == "ocr_required":
+        warnings.append("Hybrid parsing produced little usable text; OCR is still required.")
+    metadata = dict(native_document.metadata)
+    metadata.update(
+        {
+            "backend": "hybrid",
+            "page_count": len(pages),
+            "layout_provider": list(detector.session.get_providers()),
+            "layout_seconds": round(sum(layout_timings), 6),
+            "layout_page_seconds": [round(value, 6) for value in layout_timings],
+            "render_seconds": round(sum(render_timings), 6),
+            "selective_unirec_seconds": round(recognition_seconds, 6),
+            "layout_regions": total_layout_regions,
+            "selective_unirec_regions": total_ocr_regions,
+            "native_character_coverage": round(
+                mapped_native_chars / max(total_native_chars, 1), 4
+            ),
+            "block_sources": dict(sorted(source_counts.items())),
+        }
+    )
+    return Document(
+        source=str(source),
+        metadata=metadata,
+        pages=pages,
+        status=status,
+        warnings=warnings,
+    )
+
+
 def _document_from_opendoc_results(
     source: Path,
     results: dict[str, Any] | list[dict[str, Any]],
@@ -910,6 +1749,8 @@ def _document_from_opendoc_results(
                     bbox=bbox,
                     level=level,
                     confidence=confidence,
+                    source="opendoc",
+                    label="doc_title" if level == 1 else "paragraph_title",
                 )
             )
 
@@ -938,6 +1779,8 @@ def _document_from_opendoc_results(
                             text=abstract_text,
                             bbox=bbox,
                             confidence=confidence,
+                            source="opendoc",
+                            label="abstract",
                         )
                     )
             else:
@@ -947,6 +1790,8 @@ def _document_from_opendoc_results(
                         text=text,
                         bbox=bbox,
                         confidence=confidence,
+                        source="opendoc",
+                        label=label,
                     )
                 )
 
@@ -995,21 +1840,8 @@ def _parse_pdf_opendoc(
             "OpenDoc requires openocr-python==0.1.5. Install the project requirements first."
         ) from exc
 
-    base_dir = (
-        Path(model_dir)
-        if model_dir is not None
-        else Path(__file__).resolve().parent / "models" / "opendoc"
-    )
-    base_dir.mkdir(parents=True, exist_ok=True)
-    gpu_value: bool | None
-    if use_gpu == "auto":
-        gpu_value = None
-    elif use_gpu == "true":
-        gpu_value = True
-    elif use_gpu == "false":
-        gpu_value = False
-    else:
-        raise ValueError("use_gpu must be one of: auto, true, false")
+    base_dir = _opendoc_model_base(model_dir)
+    gpu_value = _opendoc_gpu_value(use_gpu)
 
     parser = OpenOCR(
         task="doc",
@@ -1067,10 +1899,10 @@ def parse_pdf(
     opendoc_max_length: int = 2048,
     opendoc_max_parallel_blocks: int = 2,
 ) -> Document:
-    """Parse a PDF with native extraction, OpenDoc, or automatic OCR fallback."""
+    """Parse with native, full OpenDoc, or layout-first hybrid extraction."""
 
-    if backend not in {"native", "auto", "opendoc"}:
-        raise ValueError("backend must be one of: native, auto, opendoc")
+    if backend not in {"native", "auto", "hybrid", "opendoc"}:
+        raise ValueError("backend must be one of: native, auto, hybrid, opendoc")
     opendoc_options = {
         "model_dir": opendoc_model_dir,
         "use_gpu": opendoc_use_gpu,
@@ -1089,20 +1921,22 @@ def parse_pdf(
         max_pages=max_pages,
     )
     native_document.metadata.setdefault("backend", "native")
-    if backend == "native" or native_document.status != "ocr_required":
+    if backend == "native":
         return native_document
 
     try:
-        opendoc_document = _parse_pdf_opendoc(pdf_path, **opendoc_options)
-        opendoc_document.warnings.insert(
-            0,
-            "Native extraction found no usable text; OpenDoc OCR fallback was used.",
+        return _parse_pdf_hybrid(
+            pdf_path,
+            native_document=native_document,
+            password=password,
+            **opendoc_options,
         )
-        return opendoc_document
     except Exception as exc:
         native_document.warnings.append(
-            f"OpenDoc OCR fallback failed: {type(exc).__name__}: {exc}"
+            f"OpenDoc layout-first hybrid failed; native fallback was used: "
+            f"{type(exc).__name__}: {exc}"
         )
+        native_document.metadata["backend"] = "native-fallback"
         return native_document
 
 
@@ -1164,9 +1998,9 @@ def _cli() -> int:
     parser.add_argument("--max-pages", type=int)
     parser.add_argument(
         "--backend",
-        choices=("auto", "native", "opendoc"),
+        choices=("auto", "hybrid", "native", "opendoc"),
         default="auto",
-        help="auto uses OpenDoc only when native extraction requires OCR",
+        help="auto/hybrid use OpenDoc layout, native text, and selective UniRec",
     )
     parser.add_argument(
         "--opendoc-model-dir",

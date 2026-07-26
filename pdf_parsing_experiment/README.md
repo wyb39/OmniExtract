@@ -7,12 +7,13 @@ See [PLAN.md](PLAN.md) for the detailed implementation plan, output contract, ar
 ## Intended pipeline
 
 1. Accept a PDF input and collect document metadata.
-2. Extract page text and layout-aware text blocks with `pypdf` and `pdfplumber`.
-3. Fall back to OpenDoc OCR when the native text layer is absent, or use OpenDoc explicitly.
-4. Detect tables, images, headers, footers, and page boundaries.
-5. Normalize the result into a lightweight `Document -> Page -> Block` model.
-6. Add fixtures and comparison checks for representative PDFs.
-7. Move the validated implementation into the appropriate `src` module.
+2. Run OpenDoc PP-DocLayoutV2 on every page for region labels and reading order.
+3. Map `pdfplumber` characters, fonts, and bold styles into those regions.
+4. Invoke UniRec only for tables, formulas, scanned pages, and low-coverage regions.
+5. Fuse OpenDoc and native table candidates.
+6. Normalize the result into a lightweight `Document -> Page -> Block` model.
+7. Add fixtures and comparison checks for representative PDFs.
+8. Move the validated implementation into the appropriate `src` module.
 
 ## Development boundary
 
@@ -51,9 +52,17 @@ Command line:
 Parser backends:
 
 ```powershell
-# Native extraction, with OpenDoc only when OCR is required
+# Layout-first hybrid (default): OpenDoc layout + native text + selective UniRec
 .\.venv\Scripts\python.exe pdf_parsing_experiment\pdf_to_markdown.py `
   input.pdf --backend auto --output output
+
+# Explicit layout-first hybrid
+.\.venv\Scripts\python.exe pdf_parsing_experiment\pdf_to_markdown.py `
+  input.pdf --backend hybrid --output output
+
+# Native-only comparison baseline
+.\.venv\Scripts\python.exe pdf_parsing_experiment\pdf_to_markdown.py `
+  input.pdf --backend native --output output
 
 # Force OpenDoc for every page
 .\.venv\Scripts\python.exe pdf_parsing_experiment\pdf_to_markdown.py `
@@ -90,12 +99,13 @@ ignored by Git.
 
 ## Current limits
 
-- `auto` invokes OpenDoc only when native extraction returns `ocr_required`; it
-  does not OCR every machine-generated PDF.
-- OpenDoc processes rasterized pages, so OCR is slower than native extraction.
+- `auto` and `hybrid` run OpenDoc Layout for every page, but do not OCR ordinary
+  machine-generated body text. Critical headings with visibly corrupt native
+  font mapping are eligible for local OCR.
+- Full OpenDoc OCR remains much slower than Layout plus native character mapping.
 - Vector chart labels can still enter the text stream because PDF figures do not
   always expose a reliable image boundary.
-- Formula reconstruction and cross-page table merging are not implemented yet.
+- Cross-page table merging is not implemented yet.
 - Borderless table detection is heuristic and deliberately rejects paragraph-like
   candidates to avoid turning prose into false tables.
 
@@ -104,7 +114,9 @@ ignored by Git.
 - [x] Define the lightweight intermediate document model in `pdf_to_markdown.py`.
 - [x] Implement `pypdf` fallback and `pdfplumber` layout/table extraction together.
 - [x] Implement Markdown and table rendering in `markdown_renderer.py`.
-- [x] Add OpenDoc parsing and automatic OCR fallback.
+- [x] Add full OpenDoc parsing and OCR fallback.
+- [x] Make OpenDoc Layout the unified `auto` entry and map native characters by region.
+- [x] Add selective UniRec for tables, formulas, and low-coverage regions.
 - [ ] Compare results against the current parser.
 - [x] Add regression tests and corpus evaluation.
 - [ ] Move the validated components into `src` and update callers.
