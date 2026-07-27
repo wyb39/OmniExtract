@@ -1,6 +1,6 @@
 import yaml
 import os
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 
 
 def generate_document_parsing_yaml(
@@ -68,7 +68,10 @@ convert_mode: "{convert_mode}"
 
 
 def extract_document_parsing_config_from_callback(
-    folder_path: str, save_path: str, file_type: str, convert_mode: str
+    folder_path: str,
+    save_path: str,
+    file_type: str,
+    convert_mode: str,
 ) -> Dict[str, Any]:
     """
     Extract data from document parsing form callback function
@@ -90,7 +93,6 @@ def extract_document_parsing_config_from_callback(
         "file_type": file_type,
         "convert_mode": convert_mode,
     }
-
     return config
 
 

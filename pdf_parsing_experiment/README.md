@@ -2,7 +2,10 @@
 
 This directory is a temporary workspace for developing and comparing the new PDF parsing pipeline before it is moved into `src`.
 
-See [PLAN.md](PLAN.md) for the detailed implementation plan, output contract, architecture, and acceptance criteria.
+See [PLAN.md](PLAN.md) for the experimental implementation plan, output
+contract, architecture, and acceptance criteria. See
+[SRC_INTEGRATION_PLAN.md](SRC_INTEGRATION_PLAN.md) for the staged production
+integration plan under `src`.
 
 ## Intended pipeline
 
@@ -18,17 +21,21 @@ See [PLAN.md](PLAN.md) for the detailed implementation plan, output contract, ar
 7. Add fixtures and comparison checks for representative PDFs.
 8. Move the validated implementation into the appropriate `src` module.
 
-The hybrid and full OpenDoc PDF paths do not use PyMuPDF. `pdfplumber` remains
-available only in the explicit `native` comparison backend.
+The hybrid and full OpenDoc PDF paths do not use PyMuPDF. The `native` backend
+is retained only as an experimental comparison path and is not exposed by the
+production integration.
 
 ## Development boundary
 
-- Keep the core implementation in no more than two files:
-  `pdf_to_markdown.py` and `markdown_renderer.py`.
+- Keep the experimental compatibility surface in two files:
+  `pdf_to_markdown.py` and `markdown_renderer.py`. The production copies now
+  live in `src/pdf_parser.py` and `src/pdf_markdown_renderer.py`.
 - Keep corpus evaluation, snapshots, and generated outputs under `tests/`; they do
   not count toward the core-file limit.
 - Keep experimental code, fixtures, and comparison output in this directory.
-- Do not import this experiment from production code until the pipeline is validated.
+- Production code imports the migrated `src` modules. The wrappers in this
+  directory remain only for experiment scripts and tests; they are not a
+  production fallback.
 - Avoid committing generated or sensitive PDF files; use small synthetic fixtures where possible.
 
 ## Prototype usage
@@ -104,6 +111,28 @@ Regression checks:
 The evaluator writes Markdown and `summary.json` under `tests/output/`, which is
 ignored by Git.
 
+## Academic Markdown splitting
+
+The renderer also exposes a `split_md` API compatible with the production
+function's folder-based call shape. It is adapted to the hybrid parser's
+Markdown conventions and keeps the existing canonical JSON keys:
+`Others`, `Introduction`, `Method`, `Result`, `Discussion`, `Conclusion`,
+`Funding`, `Acknowledgement`, `Reference`, `Conflict of Interest`,
+`Supporting Information`, and `Abbreviations`.
+
+```python
+from markdown_renderer import split_md, split_markdown_file
+
+summary = split_md("tests/output/latest", "tests/output/latest_sections")
+sections = split_markdown_file("tests/output/latest/article.md")
+```
+
+It recognizes numbered and bold headings, common broken heading words,
+`Experimental` variants, structured-abstract labels, multiline references,
+and supplementary sections. Every source character is assigned exactly once;
+tables, formulas, and unknown nested headings remain with their surrounding
+section.
+
 ## Current limits
 
 - `auto` and `hybrid` complete OpenDoc Layout for every page before extracting
@@ -131,4 +160,4 @@ ignored by Git.
   capacity fallback.
 - [ ] Compare results against the current parser.
 - [x] Add regression tests and corpus evaluation.
-- [ ] Move the validated components into `src` and update callers.
+- [x] Move the validated components into `src` and update callers.

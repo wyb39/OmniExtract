@@ -80,8 +80,17 @@ You can start using OmniExtract through the command-line interface. Please refer
 
 ## Important Notice
 
-> **This project uses the marker tool to parse PDF files.**
-> Please ensure compliance with marker’s usage requirements and licensing terms.
+> **PDF input uses the integrated Hybrid/OpenDoc parser.**
+> Hybrid is the production default. To switch the production flow to full
+> OpenDoc, edit `PDF_PARSER_BACKEND` in `src/articleUtil.py` to `"opendoc"`.
+> This switch is intentionally internal and does not change the existing
+> CLI/API/YAML input parameters.
+<!--
+> Marker compatibility notice removed from the production documentation.
+>
+> Marker remains available as an explicit backend and fallback; please ensure
+> compliance with Marker’s usage requirements and licensing terms.
 > Refer to marker’s official documentation for details:
 > https://github.com/datalab-to/marker
 > https://github.com/datalab-to/marker/blob/master/README.md
+-->

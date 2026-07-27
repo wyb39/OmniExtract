@@ -1,7 +1,5 @@
 from bs4 import Tag
 import pandas as pd
-import subprocess
-import tempfile
 from typing import Literal, Union
 from loguru import logger
 from mrkdwn_analysis import MarkdownAnalyzer
@@ -13,7 +11,11 @@ from bs4 import BeautifulSoup
 import requests
 import re
 from pylatexenc.latex2text import LatexNodes2Text
-from articleUtil import ScienceDirectXmlParser, PubMedCentralXmlParser
+from articleUtil import (
+    ScienceDirectXmlParser,
+    PubMedCentralXmlParser,
+    parse_article_to_md,
+)
 import chardet
 import json
 
@@ -725,78 +727,6 @@ def parse_file_for_table_extraction_pdf(
             raise OSError(f"Failed to create folder {save_folder_path}: {e}")
 
     err_files = []
-
-    def _run_marker_cli_for_folder(in_folder: str, out_folder: str, cfg: dict):
-        args = [
-            "marker",
-            in_folder,
-            "--output_dir",
-            out_folder,
-            "--workers",
-            "1",
-            "--output_format",
-            cfg.get("output_format", "markdown"),
-        ]
-        if cfg.get("disable_multiprocessing", False):
-            args.append("--disable_multiprocessing")
-        if cfg.get("use_llm", False):
-            args.append("--use_llm")
-            llm_service = cfg.get("llm_service")
-            if llm_service:
-                args.extend(["--llm_service", llm_service])
-        tmp_cfg_path = None
-        if cfg:
-            tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".json")
-            tmp_cfg_path = tmp_file.name
-            tmp_file.close()
-            with open(tmp_cfg_path, "w", encoding="utf-8") as f:
-                import json as _json
-                _json.dump(cfg, f, ensure_ascii=False)
-            args.extend(["--config_json", tmp_cfg_path])
-        try:
-            completed = subprocess.run(args, stdout=None, stderr=None, text=True, check=True)
-            if completed.stdout:
-                logger.debug(completed.stdout)
-            if completed.stderr:
-                logger.debug(completed.stderr)
-        finally:
-            if tmp_cfg_path and os.path.exists(tmp_cfg_path):
-                try:
-                    os.unlink(tmp_cfg_path)
-                except Exception:
-                    pass
-
-    cfg = {
-        "output_format": "markdown",
-        "disable_multiprocessing": disable_multiprocessing,
-    }
-    if use_llm:
-        if llm_config is None:
-            raise ValueError("llm_config cannot be None when use_llm is True")
-        cfg["use_llm"] = True
-        llm_service_map = {
-            "Gemini": "marker.services.gemini.GoogleGeminiService",
-            "Google Vertex": "marker.services.vertex.VertexService",
-            "Ollama": "marker.services.ollama.OllamaService",
-            "Claude": "marker.services.claude.ClaudeService",
-            "OpenAI": "marker.services.openai.OpenAIService",
-        }
-        cfg["llm_service"] = llm_service_map[llm_service]
-        llm_config_map = {
-            "Gemini": ["gemini_api_key"],
-            "Google Vertex": ["vertex_project_id"],
-            "Ollama": ["ollama_base_url", "ollama_model"],
-            "Claude": ["claude_api_key", "claude_model_name"],
-            "OpenAI": ["openai_api_key", "openai_model", "openai_base_url"],
-        }
-        for key in llm_config_map[llm_service]:
-            if key in llm_config:
-                cfg[key] = llm_config[key]
-            else:
-                raise ValueError(
-                    f"llm_config must contain {key} when use_llm is True and llm_service is {llm_service}"
-                )
-
     pdf_files = [f for f in os.listdir(file_folder_path) if f.lower().endswith(".pdf")]
     if pdf_files:
         import tempfile as _tempfile
@@ -808,7 +738,7 @@ def parse_file_for_table_extraction_pdf(
                     os.path.join(file_folder_path, _f),
                     os.path.join(_tmp_pdf_dir, _f),
                 )
-            _run_marker_cli_for_folder(_tmp_pdf_dir, save_folder_path, cfg)
+            parse_article_to_md(_tmp_pdf_dir, save_folder_path)
         finally:
             try:
                 _shutil.rmtree(_tmp_pdf_dir)

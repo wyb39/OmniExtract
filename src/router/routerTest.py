@@ -143,7 +143,11 @@ def test():
 async def file_to_md_api(data: PathSettings):
     try:
         logger.info(f"file_to_md data: {data}")
-        result = file_to_md(data.folder_path, data.save_path, data.file_type)
+        result = file_to_md(
+            data.folder_path,
+            data.save_path,
+            data.file_type,
+        )
         return {"message": "file_to_md completed", "result": result}
     except Exception as e:
         logger.info(f"Exception file_to_md error: {e}")
@@ -166,7 +170,10 @@ async def file_to_json_api(data: PathSettings):
     try:
         logger.info(f"file_to_json data: {data}")
         result = file_to_json(
-            data.folder_path, data.save_path, data.file_type, data.convert_mode
+            data.folder_path,
+            data.save_path,
+            data.file_type,
+            data.convert_mode,
         )
         return {"message": "file_to_json completed", "result": result}
     except Exception as e:

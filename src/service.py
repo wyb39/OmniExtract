@@ -321,7 +321,12 @@ def file_to_md(folder_path, save_path, file_type):
         )
 
 
-def file_to_json(folder_path, save_path, file_type, convert_mode):
+def file_to_json(
+    folder_path,
+    save_path,
+    file_type,
+    convert_mode,
+):
     """
     Convert documents to JSON format through Markdown intermediate step
 
@@ -344,7 +349,11 @@ def file_to_json(folder_path, save_path, file_type, convert_mode):
 
         # Step 1: Convert files to markdown
         logger.info(f"Converting {file_type} files to markdown...")
-        md_files = file_to_md(folder_path, temp_md_dir, file_type)
+        md_files = file_to_md(
+            folder_path,
+            temp_md_dir,
+            file_type,
+        )
         logger.info(f"Successfully converted {len(md_files)} files to markdown")
 
         # Step 2: Convert markdown to json

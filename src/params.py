@@ -2,6 +2,7 @@ from pydantic import BaseModel
 from typing import Literal, Optional
 from optimUtil import DspyField
 
+
 class PathSettings(BaseModel):
     folder_path: str
     save_path: str

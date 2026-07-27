@@ -84,7 +84,6 @@ def extract_table_parsing_config_from_callback(
         "save_folder_path": table_save_path,
         "non_tabular_file_format": table_file_type,
     }
-
     return config
 
 

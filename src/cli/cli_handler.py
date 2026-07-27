@@ -141,7 +141,9 @@ def run_file_to_md(data):
         logger.info(f"file_to_md data: {data}")
         path_settings = PathSettings.model_validate(data)
         result = file_to_md(
-            path_settings.folder_path, path_settings.save_path, path_settings.file_type
+            path_settings.folder_path,
+            path_settings.save_path,
+            path_settings.file_type,
         )
         logger.info("file_to_md completed")
         return {"message": "file_to_md completed", "result": result}
