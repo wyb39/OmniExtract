@@ -1211,6 +1211,28 @@ def _pdfium_font_name(text_page: Any, index: int) -> str:
     return buffer.value.decode("utf-8", errors="replace")
 
 
+def _pdfium_charbox_to_page_bbox(
+    charbox: Sequence[float],
+    page_bbox: Sequence[float],
+) -> BBox:
+    """Convert an absolute PDFium char box to top-origin rendered-page space."""
+
+    char_left, char_bottom, char_right, char_top = (
+        float(value) for value in charbox
+    )
+    page_left, page_bottom, page_right, page_top = (
+        float(value) for value in page_bbox
+    )
+    page_x0 = min(page_left, page_right)
+    page_y1 = max(page_bottom, page_top)
+    return (
+        min(char_left, char_right) - page_x0,
+        page_y1 - max(char_bottom, char_top),
+        max(char_left, char_right) - page_x0,
+        page_y1 - min(char_bottom, char_top),
+    )
+
+
 def _pdfium_page_chars(
     page: Any,
     *,
@@ -1220,7 +1242,10 @@ def _pdfium_page_chars(
 
     import pypdfium2.raw as pdfium_c
 
-    page_height = float(page.get_height())
+    try:
+        page_bbox = tuple(float(value) for value in page.get_bbox())
+    except Exception:
+        page_bbox = (0.0, 0.0, float(page.get_width()), float(page.get_height()))
     text_page = page.get_textpage()
     chars: list[dict[str, Any]] = []
     try:
@@ -1261,14 +1286,22 @@ def _pdfium_page_chars(
             raw_font_size = float(
                 pdfium_c.FPDFText_GetFontSize(text_page, index)
             )
+            char_bbox = _pdfium_charbox_to_page_bbox(
+                (
+                    loose_left,
+                    loose_bottom,
+                    loose_right,
+                    loose_top,
+                ),
+                page_bbox,
+            )
             chars.append(
                 {
                     "text": text,
-                    "x0": float(min(loose_left, loose_right)),
-                    "x1": float(max(loose_left, loose_right)),
-                    "top": page_height - float(max(loose_bottom, loose_top)),
-                    "bottom": page_height
-                    - float(min(loose_bottom, loose_top)),
+                    "x0": char_bbox[0],
+                    "top": char_bbox[1],
+                    "x1": char_bbox[2],
+                    "bottom": char_bbox[3],
                     "size": max(
                         raw_font_size,
                         abs(float(loose_top) - float(loose_bottom)),

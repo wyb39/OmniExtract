@@ -28,6 +28,7 @@ from pdf_to_markdown import (
     _native_blocks_for_layout_region,
     _native_table_is_plausible,
     _normalize_layout_heading,
+    _pdfium_charbox_to_page_bbox,
     parse_pdf,
     _run_opendoc_layout,
     _table_crop_rotation,
@@ -234,6 +235,15 @@ class RendererTests(unittest.TestCase):
         self.assertEqual(blocks[0].source, "layout-native")
         self.assertEqual(blocks[0].text, "Hybrid Title")
         self.assertGreater(blocks[0].bold_ratio, 0.9)
+
+    def test_pdfium_charbox_respects_nonzero_page_origin(self) -> None:
+        self.assertEqual(
+            _pdfium_charbox_to_page_bbox(
+                charbox=(70.0, 800.0, 170.0, 820.0),
+                page_bbox=(40.0, 50.0, 640.0, 850.0),
+            ),
+            (30.0, 30.0, 130.0, 50.0),
+        )
 
     def test_layout_source_chars_preserve_explicit_whitespace(self) -> None:
         chars = [
