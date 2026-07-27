@@ -67,6 +67,11 @@ python app.py
 Make sure your virtual environment is activated.
 Then open your browser and navigate to http://127.0.0.1:8050/ to use the tool.
 
+The Jinja2 web UI is also available from the FastAPI service. Start it with
+`python src/main.py`, then open http://127.0.0.1:9000/omniextract/. It uses the
+same API handlers as the existing CLI service and serves the migrated templates
+from `ui_jinja/templates`.
+
 For Linux server deployment, set a password to encrypt the model `api_key` and expose the service externally:
 First, modify `gui/app.py` to listen on all interfaces by changing the default host to `0.0.0.0` (replace `os.environ.get("HOST", "127.0.0.1")` with `os.environ.get("HOST", "0.0.0.0")`).
 ```bash

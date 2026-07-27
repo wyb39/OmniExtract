@@ -1,0 +1,781 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h2 class="module-title">Document Extraction - Original</h2>
+
+<form id="doc-extraction-original-form" class="module-container">
+  <div class="section-container">
+    <h3 class="section-title">Contact Email</h3>
+    <div class="form-group">
+      <label class="form-label" for="de-contact-email">Contact Email</label>
+      <input id="de-contact-email" name="contact_email" class="form-input email-input" type="email" placeholder="Enter your email address" />
+      <small class="form-hint">This email will be used for notifications about this task</small>
+      <div class="email-error" style="display:none;color:#dc2626;font-size:13px;margin-top:4px;"></div>
+    </div>
+  </div>
+
+  <div class="section-container">
+    <h3 class="section-title">Task Name</h3>
+    <div class="form-group">
+      <label class="form-label" for="task-name">Task Name</label>
+      <input id="task-name" class="form-input" placeholder="Enter a name for this task" />
+    </div>
+  </div>
+
+  <div class="section-container">
+    <h3 class="section-title">File Type Configuration</h3>
+    <div class="form-group">
+      <label class="form-label" for="dp-file-type">File Type</label>
+      <select id="dp-file-type" class="form-select">
+        <option value="PDF">PDF</option>
+        <option value="scienceDirect">ScienceDirect</option>
+        <option value="PMC">PMC</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="section-container">
+    <h3 class="section-title">Upload File Package</h3>
+    <div class="form-group">
+      <label class="form-label" for="source-zip">Upload Zip File</label>
+      <div class="file-upload-wrapper">
+        <input type="file" id="source-zip" name="source_zip" class="file-upload-input" accept=".zip" />
+        <div class="file-upload-box">
+          <i class="fas fa-cloud-upload-alt file-upload-icon"></i>
+          <p class="file-upload-text">Click to upload or drag and drop</p>
+          <p class="file-upload-hint">ZIP file only (Max 30 PDFs/XMLs)</p>
+          <div id="file-name-display" style="display:none; margin-top: 10px; font-weight: 500; color: #374151;"></div>
+        </div>
+      </div>
+      <div id="validation-result" style="margin-top: 15px; color: #666; font-size: 14px; text-align: center;"></div>
+    </div>
+  </div>
+
+  <style>
+    .file-upload-wrapper {
+      position: relative;
+      width: 100%;
+      height: 150px;
+      border: 2px dashed #e5e7eb;
+      border-radius: 8px;
+      transition: all 0.3s ease;
+      background-color: #f9fafb;
+      cursor: pointer;
+    }
+    .file-upload-wrapper:hover {
+      border-color: #3b82f6;
+      background-color: #eff6ff;
+    }
+    .file-upload-wrapper.drag-over {
+      border-color: #2563eb;
+      background-color: #dbeafe;
+    }
+    .file-upload-input {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      top: 0;
+      left: 0;
+      opacity: 0;
+      cursor: pointer;
+      z-index: 10;
+    }
+    .file-upload-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      pointer-events: none;
+    }
+    .file-upload-icon {
+      font-size: 32px;
+      color: #9ca3af;
+      margin-bottom: 8px;
+    }
+    .file-upload-text {
+      margin: 0;
+      font-size: 14px;
+      color: #4b5563;
+      font-weight: 500;
+    }
+    .file-upload-hint {
+      margin: 4px 0 0;
+      font-size: 12px;
+      color: #9ca3af;
+    }
+  </style>
+
+  <div class="section-container">
+    <h3 class="section-title">Conversion Mode</h3>
+    <div class="form-group">
+      <label class="form-label" for="dp-convert-mode">Conversion Mode</label>
+      <select id="dp-convert-mode" class="form-select">
+        <option value="byPart">By Part (divide document by article parts)</option>
+        <option value="wholeDoc">Whole Document (convert entire document as one)</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="section-container">
+    <h3 class="section-title">Input Fields</h3>
+    <div style="background-color: #eff6ff; border-left: 4px solid #3b82f6; padding: 10px; margin-bottom: 15px; border-radius: 4px; font-size: 14px; color: #1e40af;">
+      <p style="margin: 0 0 5px 0; font-weight: bold;">Please adjust InputField according to the selected Conversion Mode:</p>
+      <ul style="margin: 0; padding-left: 20px;">
+        <li><strong>By Part Mode:</strong> Input Field names must be one of: <code>Introduction</code>, <code>Method</code>, <code>Result</code>, <code>Discussion</code>, <code>Conclusion</code>.</li>
+        <li><strong>Whole Document Mode:</strong> Only one Input Field is allowed, and its name must be <code>Document</code>.</li>
+      </ul>
+    </div>
+    <button id="de-add-input-field" class="btn" style="margin-bottom:15px;height:32px;padding:0 12px;font-size:12px">Add InputField</button>
+    <div id="de-input-fields-container">
+      <div id="de-input-field-initial" class="section-container" style="border:1px solid #e1e5e9;border-radius:8px;padding:16px;margin-bottom:20px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <h4 style="margin:0;font-size:16px">Input Field</h4>
+          <button id="de-delete-input-field" class="delete-button" style="background:none;border:none;color:#6b7280;font-size:20px;cursor:pointer;padding:0 5px;line-height:1;border-radius:4px">×</button>
+        </div>
+        <div style="display:flex;gap:20px">
+          <div style="flex:1">
+            <label class="form-label" for="de-input-name">Input Field Name</label>
+            <input id="de-input-name" class="form-input" placeholder="Method" style="height:38px" />
+          </div>
+          <div style="flex:1">
+            <label class="form-label" for="de-input-type">Input Field Type</label>
+      <select id="de-input-type" class="form-select">
+              <option value="str">String</option>
+              <option value="int">Integer</option>
+              <option value="float">Float</option>
+              <option value="bool">Boolean</option>
+              <option value="list">List</option>
+              <option value="literal">Literal</option>
+              <option value="list_literal">List Literal</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="de-input-description">Input Field Description</label>
+          <input id="de-input-description" class="form-input" placeholder="The method section of a Nature Communications journal article" />
+        </div>
+        <div style="display:flex;gap:20px">
+          <div style="flex:1">
+            <label class="form-checkbox"><input type="checkbox" id="de-input-add-range" /> Add Range Limits</label>
+          </div>
+          <div style="flex:1">
+            <label class="form-checkbox"><input type="checkbox" id="de-input-add-literal" /> Add Literal List</label>
+          </div>
+        </div>
+        <div id="de-input-range-container" style="display:none">
+          <div class="form-group">
+            <label class="form-label" for="de-input-range-min">Range Minimum</label>
+            <input id="de-input-range-min" class="form-input" type="number" placeholder="Min value" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="de-input-range-max">Range Maximum</label>
+            <input id="de-input-range-max" class="form-input" type="number" placeholder="Max value" />
+          </div>
+        </div>
+        <div id="de-input-literal-container" style="display:none">
+          <div class="form-group">
+            <label class="form-label" for="de-input-literal-list">Literal List (comma separated)</label>
+            <input id="de-input-literal-list" class="form-input" placeholder="option1,option2,option3" />
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-container">
+    <h3 class="section-title">Output Fields</h3>
+    <button id="de-add-output-field" class="btn" style="margin-bottom:15px;height:32px;padding:0 12px;font-size:12px">Add OutputField</button>
+    <div id="de-output-fields-container">
+      <div id="de-output-field-initial" class="section-container" style="border:1px solid #e1e5e9;border-radius:8px;padding:16px;margin-bottom:20px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <h4 style="margin:0;font-size:16px">Output Field</h4>
+          <button id="de-delete-output-field" class="delete-button" style="background:none;border:none;color:#6b7280;font-size:20px;cursor:pointer;padding:0 5px;line-height:1;border-radius:4px">×</button>
+        </div>
+        <div style="display:flex;gap:20px">
+          <div style="flex:1">
+            <label class="form-label" for="de-output-name">Output Field Name</label>
+            <input id="de-output-name" class="form-input" placeholder="output_field" />
+          </div>
+          <div style="flex:1">
+            <label class="form-label" for="de-output-type">Output Field Type</label>
+          <select id="de-output-type" class="form-select">
+              <option value="str">String</option>
+              <option value="int">Integer</option>
+              <option value="float">Float</option>
+              <option value="bool">Boolean</option>
+              <option value="list">List</option>
+              <option value="literal">Literal</option>
+              <option value="list_literal">List Literal</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="de-output-description">Output Field Description</label>
+          <input id="de-output-description" class="form-input" placeholder="Description of this output field" />
+        </div>
+        <div style="display:flex;gap:20px">
+          <div style="flex:1">
+            <label class="form-checkbox"><input type="checkbox" id="de-output-add-range" /> Add Range Limits</label>
+          </div>
+          <div style="flex:1">
+            <label class="form-checkbox"><input type="checkbox" id="de-output-add-literal" /> Add Literal List</label>
+          </div>
+        </div>
+        <div id="de-output-range-container" style="display:none">
+          <div class="form-group">
+            <label class="form-label" for="de-output-range-min">Range Minimum</label>
+            <input id="de-output-range-min" class="form-input" type="number" placeholder="Min value" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="de-output-range-max">Range Maximum</label>
+            <input id="de-output-range-max" class="form-input" type="number" placeholder="Max value" />
+          </div>
+        </div>
+        <div id="de-output-literal-container" style="display:none">
+          <div class="form-group">
+            <label class="form-label" for="de-output-literal-list">Literal List (comma separated)</label>
+            <input id="de-output-literal-list" class="form-input" placeholder="option1,option2,option3" />
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-container">
+    <h3 class="section-title">Prompt Configuration</h3>
+    <div class="form-group">
+      <label class="form-label" for="de-initial-prompt">Initial Prompt</label>
+      <textarea id="de-initial-prompt" class="form-textarea" style="height:120px" placeholder="(Refer to the example below for the required prompt format)
+    Extract clinical information for patient and healthy control groups from biomedical literature. 
+    Follow these rules:
+    1) Preserve full group names exactly as reported.
+    2) When extracting age, report values in years (convert units to years when necessary).
+    3) When calculating sex percentages, report values rounded to two decimal places.
+    4) Keep all extracted values precise and cite the source sentence or table.
+    ..."></textarea>
+    </div>
+  </div>
+
+  <div class="section-container">
+    <h3 class="section-title">Processing Settings</h3>
+    <div class="form-group">
+      <label class="form-label" for="de-judging">Judging Mode</label>
+      <select id="de-judging" class="form-select">
+        <option value="">None</option>
+        <option value="confidence">Confidence</option>
+        <option value="score">Score</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="de-threads">Threads</label>
+      <input id="de-threads" class="form-input" type="number" placeholder="6" value="6" />
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="de-multiple">Multiple Entities</label>
+      <label class="form-checkbox"><input type="checkbox" id="de-multiple" checked /> Set true for extracting multiple entities from the document</label>
+    </div>
+  </div>
+
+  <div class="form-actions">
+    <button id="start-combined" class="btn btn-primary" style="height:38px;padding:0 20px; margin-right: 10px;">Start Extraction</button>
+    <button id="btn-export-config" class="btn" style="background-color: #10b981; color: white; margin-right: 10px; height:38px; padding:0 20px;">Export Config</button>
+    <button id="btn-load-config" class="btn" style="background-color: #3b82f6; color: white; height:38px; padding:0 20px;">Load Config</button>
+    <input type="file" id="file-load-config" style="display: none;" accept=".json">
+    <div id="combined-results" style="margin-top:20px"></div>
+  </div>
+</form>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+document.getElementById('source-zip').addEventListener('change', function(event) {
+  var file = event.target.files[0];
+  var fileNameDisplay = document.getElementById('file-name-display');
+  var resultDiv = document.getElementById('validation-result');
+
+  if (!file) {
+      fileNameDisplay.style.display = 'none';
+      return;
+  }
+
+  // Display selected file name
+  fileNameDisplay.textContent = file.name;
+  fileNameDisplay.style.display = 'block';
+
+  resultDiv.innerHTML = 'Validating... <i class="fas fa-spinner fa-spin"></i>';
+
+  JSZip.loadAsync(file).then(function(zip) {
+    var fileCount = 0;
+    var validFileCount = 0;
+    var invalidFiles = [];
+    
+    zip.forEach(function (relativePath, zipEntry) {
+      // Ignore directories and hidden files (starting with . or __MACOSX)
+      if (!zipEntry.dir && !relativePath.startsWith('__MACOSX') && !relativePath.split('/').pop().startsWith('.')) {
+        fileCount++;
+        var lowerPath = relativePath.toLowerCase();
+        if (lowerPath.endsWith('.pdf') || lowerPath.endsWith('.xml')) {
+            validFileCount++;
+        } else {
+            invalidFiles.push(relativePath);
+        }
+      }
+    });
+
+    var errors = [];
+    if (validFileCount === 0) {
+        errors.push("No PDF or XML files found.");
+    }
+    if (invalidFiles.length > 0) {
+        errors.push("Contains invalid files (" + invalidFiles.length + "): " + invalidFiles.slice(0, 3).join(", ") + (invalidFiles.length > 3 ? "..." : ""));
+    }
+    if (fileCount > 30) {
+        errors.push("Too many files (" + fileCount + "). Max allowed is 30.");
+    }
+
+    if (errors.length === 0) {
+      resultDiv.innerHTML = '<div style="color: #059669; background-color: #d1fae5; padding: 10px; border-radius: 6px; display: inline-block;">' + 
+                            '<i class="fas fa-check-circle"></i> Validation Passed! Ready for upload.<br>' +
+                            '<small style="color: #047857;">Total files: ' + fileCount + ' (PDF/XML)</small></div>';
+    } else {
+      // Clear the file input if validation fails so it won't be uploaded
+      event.target.value = ''; 
+      fileNameDisplay.style.display = 'none';
+      resultDiv.innerHTML = '<div style="color: #dc2626; background-color: #fee2e2; padding: 10px; border-radius: 6px; display: inline-block;">' + 
+                            '<i class="fas fa-times-circle"></i> Validation Failed!<br>' +
+                            '<small>' + errors.join("<br>") + '</small></div>';
+    }
+
+  }, function (e) {
+    event.target.value = '';
+    fileNameDisplay.style.display = 'none';
+    resultDiv.innerHTML = '<div style="color: #dc2626; background-color: #fee2e2; padding: 10px; border-radius: 6px; display: inline-block;">' + 
+                          'Error reading zip file: ' + e.message + '</div>';
+  });
+});
+
+// Drag and drop visual feedback
+var uploadWrapper = document.querySelector('.file-upload-wrapper');
+var uploadInput = document.querySelector('.file-upload-input');
+
+['dragenter', 'dragover'].forEach(eventName => {
+  uploadInput.addEventListener(eventName, function() {
+    uploadWrapper.classList.add('drag-over');
+  }, false);
+});
+
+['dragleave', 'drop'].forEach(eventName => {
+  uploadInput.addEventListener(eventName, function() {
+    uploadWrapper.classList.remove('drag-over');
+  }, false);
+});
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  var inputIndex = 1;
+  var outputIndex = 1;
+  var inputContainer = document.getElementById('de-input-fields-container');
+  var outputContainer = document.getElementById('de-output-fields-container');
+  var addInputBtn = document.getElementById('de-add-input-field');
+  var addOutputBtn = document.getElementById('de-add-output-field');
+  var inputTemplateNode = document.getElementById('de-input-field-initial').cloneNode(true);
+  var outputTemplateNode = document.getElementById('de-output-field-initial').cloneNode(true);
+  function createClone(kind, index) {
+    var template = kind === 'input' ? inputTemplateNode : outputTemplateNode;
+    var clone = template.cloneNode(true);
+    clone.id = (kind === 'input' ? 'de-input-field' : 'de-output-field') + '-' + index;
+    var idMap = {};
+    clone.querySelectorAll('[id]').forEach(function(el) {
+      var oldId = el.id;
+      var newId = oldId + '-' + index;
+      idMap[oldId] = newId;
+      el.id = newId;
+      if (el.tagName === 'INPUT') {
+        if (el.type === 'checkbox') {
+          el.checked = false;
+        } else {
+          el.value = '';
+        }
+      } else if (el.tagName === 'TEXTAREA') {
+        el.value = '';
+      }
+    });
+    clone.querySelectorAll('label[for]').forEach(function(label) {
+      var oldFor = label.getAttribute('for');
+      if (idMap[oldFor]) {
+        label.setAttribute('for', idMap[oldFor]);
+      }
+    });
+    var rangeContainer = clone.querySelector(kind === 'input' ? '[id^="de-input-range-container"]' : '[id^="de-output-range-container"]');
+    var literalContainer = clone.querySelector(kind === 'input' ? '[id^="de-input-literal-container"]' : '[id^="de-output-literal-container"]');
+    if (rangeContainer) rangeContainer.style.display = 'none';
+    if (literalContainer) literalContainer.style.display = 'none';
+    return clone;
+  }
+  function handleDelete(e, kind) {
+    var btn = e.target.closest('.delete-button');
+    if (!btn) return;
+    var selector = kind === 'input' ? '[id^="de-input-field"]' : '[id^="de-output-field"]';
+    var block = btn.closest(selector);
+    if (block) block.remove();
+  }
+  function handleToggle(e, kind) {
+    var target = e.target;
+    if (!target || target.type !== 'checkbox') return;
+    var block = target.closest(kind === 'input' ? '[id^="de-input-field"]' : '[id^="de-output-field"]');
+    if (!block) return;
+    var isRange = target.id.indexOf(kind === 'input' ? 'de-input-add-range' : 'de-output-add-range') === 0;
+    var isLiteral = target.id.indexOf(kind === 'input' ? 'de-input-add-literal' : 'de-output-add-literal') === 0;
+    if (isRange) {
+      var r = block.querySelector(kind === 'input' ? '[id^="de-input-range-container"]' : '[id^="de-output-range-container"]');
+      if (r) r.style.display = target.checked ? 'block' : 'none';
+    }
+    if (isLiteral) {
+      var l = block.querySelector(kind === 'input' ? '[id^="de-input-literal-container"]' : '[id^="de-output-literal-container"]');
+      if (l) l.style.display = target.checked ? 'block' : 'none';
+    }
+  }
+  if (addInputBtn) {
+    addInputBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      var block = createClone('input', inputIndex++);
+      inputContainer.appendChild(block);
+    });
+  }
+  if (addOutputBtn) {
+    addOutputBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      var block = createClone('output', outputIndex++);
+      outputContainer.appendChild(block);
+    });
+  }
+  inputContainer.addEventListener('click', function(e) { handleDelete(e, 'input'); });
+  outputContainer.addEventListener('click', function(e) { handleDelete(e, 'output'); });
+  inputContainer.addEventListener('change', function(e) { handleToggle(e, 'input'); });
+  outputContainer.addEventListener('change', function(e) { handleToggle(e, 'output'); });
+});
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Export Configuration
+    document.getElementById('btn-export-config').addEventListener('click', function(e) {
+        e.preventDefault();
+        
+        const config = {
+            taskName: document.getElementById('task-name').value,
+            fileType: document.getElementById('dp-file-type').value,
+            convertMode: document.getElementById('dp-convert-mode').value,
+            initialPrompt: document.getElementById('de-initial-prompt').value,
+            judgingMode: document.getElementById('de-judging').value,
+            threads: document.getElementById('de-threads').value,
+            multipleEntities: document.getElementById('de-multiple').checked,
+            inputFields: [],
+            outputFields: []
+        };
+
+        // Helper to extract field data
+        function extractFieldData(container) {
+            const name = container.querySelector('[id^="de-input-name"], [id^="de-output-name"]').value;
+            const type = container.querySelector('[id^="de-input-type"], [id^="de-output-type"]').value;
+            const desc = container.querySelector('[id^="de-input-description"], [id^="de-output-description"]').value;
+            
+            const rangeCheckbox = container.querySelector('[id^="de-input-add-range"], [id^="de-output-add-range"]');
+            const literalCheckbox = container.querySelector('[id^="de-input-add-literal"], [id^="de-output-add-literal"]');
+            
+            const fieldData = {
+                name: name,
+                type: type,
+                description: desc,
+                hasRange: rangeCheckbox.checked,
+                hasLiteral: literalCheckbox.checked
+            };
+
+            if (rangeCheckbox.checked) {
+                fieldData.rangeMin = container.querySelector('[id^="de-input-range-min"], [id^="de-output-range-min"]').value;
+                fieldData.rangeMax = container.querySelector('[id^="de-input-range-max"], [id^="de-output-range-max"]').value;
+            }
+
+            if (literalCheckbox.checked) {
+                fieldData.literalList = container.querySelector('[id^="de-input-literal-list"], [id^="de-output-literal-list"]').value;
+            }
+
+            return fieldData;
+        }
+
+        // Input Fields
+        const inputContainers = document.getElementById('de-input-fields-container').children;
+        for (let i = 0; i < inputContainers.length; i++) {
+            config.inputFields.push(extractFieldData(inputContainers[i]));
+        }
+
+        // Output Fields
+        const outputContainers = document.getElementById('de-output-fields-container').children;
+        for (let i = 0; i < outputContainers.length; i++) {
+            config.outputFields.push(extractFieldData(outputContainers[i]));
+        }
+
+        // Download JSON
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(config, null, 2));
+        const downloadAnchorNode = document.createElement('a');
+        downloadAnchorNode.setAttribute("href", dataStr);
+        downloadAnchorNode.setAttribute("download", (config.taskName || "config") + ".json");
+        document.body.appendChild(downloadAnchorNode); // required for firefox
+        downloadAnchorNode.click();
+        downloadAnchorNode.remove();
+    });
+
+    // Load Configuration
+    document.getElementById('btn-load-config').addEventListener('click', function(e) {
+        e.preventDefault();
+        document.getElementById('file-load-config').click();
+    });
+
+    document.getElementById('file-load-config').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            try {
+                const config = JSON.parse(event.target.result);
+                
+                // Static fields
+                document.getElementById('task-name').value = config.taskName || '';
+                document.getElementById('dp-file-type').value = config.fileType || 'PDF';
+                document.getElementById('dp-convert-mode').value = config.convertMode || 'byPart';
+                document.getElementById('de-initial-prompt').value = config.initialPrompt || '';
+                document.getElementById('de-judging').value = config.judgingMode || '';
+                document.getElementById('de-threads').value = config.threads || '6';
+                document.getElementById('de-multiple').checked = config.multipleEntities !== undefined ? config.multipleEntities : true;
+
+                // Helper to populate field
+                function populateField(container, data, type) {
+                    const prefix = type === 'input' ? 'de-input' : 'de-output';
+                    
+                    container.querySelector(`[id^="${prefix}-name"]`).value = data.name || '';
+                    container.querySelector(`[id^="${prefix}-type"]`).value = data.type || 'str';
+                    container.querySelector(`[id^="${prefix}-description"]`).value = data.description || '';
+                    
+                    const rangeCheckbox = container.querySelector(`[id^="${prefix}-add-range"]`);
+                    rangeCheckbox.checked = data.hasRange || false;
+                    // Trigger change to update visibility
+                    rangeCheckbox.dispatchEvent(new Event('change', { bubbles: true }));
+                    
+                    if (data.hasRange) {
+                        container.querySelector(`[id^="${prefix}-range-min"]`).value = data.rangeMin || '';
+                        container.querySelector(`[id^="${prefix}-range-max"]`).value = data.rangeMax || '';
+                    }
+
+                    const literalCheckbox = container.querySelector(`[id^="${prefix}-add-literal"]`);
+                    literalCheckbox.checked = data.hasLiteral || false;
+                    // Trigger change to update visibility
+                    literalCheckbox.dispatchEvent(new Event('change', { bubbles: true }));
+
+                    if (data.hasLiteral) {
+                        container.querySelector(`[id^="${prefix}-literal-list"]`).value = data.literalList || '';
+                    }
+                }
+
+                // Reset and Populate Input Fields
+                const inputContainer = document.getElementById('de-input-fields-container');
+                // Remove all fields
+                while (inputContainer.firstChild) {
+                    inputContainer.removeChild(inputContainer.firstChild);
+                }
+                
+                if (config.inputFields && config.inputFields.length > 0) {
+                    config.inputFields.forEach((fieldData) => {
+                        document.getElementById('de-add-input-field').click();
+                        const container = inputContainer.lastElementChild;
+                        populateField(container, fieldData, 'input');
+                    });
+                } else {
+                    // If no fields in config, add one empty default field
+                    document.getElementById('de-add-input-field').click();
+                }
+
+                // Reset and Populate Output Fields
+                const outputContainer = document.getElementById('de-output-fields-container');
+                // Remove all fields
+                while (outputContainer.firstChild) {
+                    outputContainer.removeChild(outputContainer.firstChild);
+                }
+                
+                if (config.outputFields && config.outputFields.length > 0) {
+                    config.outputFields.forEach((fieldData) => {
+                        document.getElementById('de-add-output-field').click();
+                        const container = outputContainer.lastElementChild;
+                        populateField(container, fieldData, 'output');
+                    });
+                } else {
+                    // If no fields in config, add one empty default field
+                    document.getElementById('de-add-output-field').click();
+                }
+                
+                // Reset file input so same file can be loaded again if needed
+                e.target.value = '';
+
+            } catch (error) {
+                console.error('Error parsing config file:', error);
+                alert('Error loading configuration file. Please check the file format.');
+            }
+        };
+        reader.readAsText(file);
+    });
+});
+</script>
+
+<script>
+document.getElementById('start-combined').addEventListener('click', async function(e) {
+    e.preventDefault();
+    
+    const resultDiv = document.getElementById('combined-results');
+    resultDiv.innerHTML = '<div style="color: #2563eb;"><i class="fas fa-spinner fa-spin"></i> Processing...</div>';
+    
+    if (typeof validateEmailInputById === 'function') {
+        var emailValid = validateEmailInputById('de-contact-email');
+        if (!emailValid) {
+            resultDiv.innerHTML = '';
+            return;
+        }
+    }
+    
+    // 1. Collect Data
+    const taskName = document.getElementById('task-name').value.trim();
+    if (!taskName) {
+        alert('Please enter a Task Name.');
+        resultDiv.innerHTML = '';
+        return;
+    }
+    
+    const fileInput = document.getElementById('source-zip');
+    if (!fileInput.files[0]) {
+        alert('Please upload a zip file.');
+        resultDiv.innerHTML = '';
+        return;
+    }
+    
+    const convertMode = document.getElementById('dp-convert-mode').value;
+    
+    // Helper to extract field data (duplicated for independence)
+    function getFieldData(container) {
+        const name = container.querySelector('[id^="de-input-name"], [id^="de-output-name"]').value.trim();
+        const type = container.querySelector('[id^="de-input-type"], [id^="de-output-type"]').value;
+        const desc = container.querySelector('[id^="de-input-description"], [id^="de-output-description"]').value.trim();
+        const rangeCheckbox = container.querySelector('[id^="de-input-add-range"], [id^="de-output-add-range"]');
+        const literalCheckbox = container.querySelector('[id^="de-input-add-literal"], [id^="de-output-add-literal"]');
+        
+        const fieldData = { name, type, description: desc, hasRange: rangeCheckbox.checked, hasLiteral: literalCheckbox.checked };
+        
+        if (rangeCheckbox.checked) {
+            fieldData.rangeMin = container.querySelector('[id^="de-input-range-min"], [id^="de-output-range-min"]').value;
+            fieldData.rangeMax = container.querySelector('[id^="de-input-range-max"], [id^="de-output-range-max"]').value;
+        }
+        if (literalCheckbox.checked) {
+            fieldData.literalList = container.querySelector('[id^="de-input-literal-list"], [id^="de-output-literal-list"]').value;
+        }
+        return fieldData;
+    }
+    
+    const inputFields = [];
+    const inputContainers = document.getElementById('de-input-fields-container').children;
+    for (let i = 0; i < inputContainers.length; i++) {
+        inputFields.push(getFieldData(inputContainers[i]));
+    }
+    
+    const outputFields = [];
+    const outputContainers = document.getElementById('de-output-fields-container').children;
+    for (let i = 0; i < outputContainers.length; i++) {
+        outputFields.push(getFieldData(outputContainers[i]));
+    }
+
+    const hasEmptyInputName = inputFields.some(function(field) { return !field.name; });
+    const hasEmptyOutputName = outputFields.some(function(field) { return !field.name; });
+    if (hasEmptyInputName || hasEmptyOutputName) {
+        alert('Field name cannot be empty. Please fill in all field names.');
+        resultDiv.innerHTML = '';
+        return;
+    }
+    
+    // 2. Validate Input Fields
+    const validParts = ["Introduction", "Method", "Result", "Discussion", "Conclusion"];
+    if (convertMode === 'byPart') {
+        for (const field of inputFields) {
+            if (!validParts.includes(field.name)) {
+                alert(`Invalid InputField name '${field.name}' for By Part mode.\nAllowed: ${validParts.join(', ')}`);
+                resultDiv.innerHTML = '';
+                return;
+            }
+        }
+    } else if (convertMode === 'wholeDoc') {
+        if (inputFields.length !== 1 || inputFields[0].name !== 'Document') {
+            alert("For Whole Document mode, there must be exactly one InputField named 'Document'.");
+            resultDiv.innerHTML = '';
+            return;
+        }
+    }
+    
+    // 3. Prepare Config
+    const config = {
+        taskName: taskName,
+        contactEmail: document.getElementById('de-contact-email').value.trim(),
+        fileType: document.getElementById('dp-file-type').value,
+        convertMode: convertMode,
+        inputFields: inputFields,
+        outputFields: outputFields,
+        initialPrompt: document.getElementById('de-initial-prompt').value,
+        judgingMode: document.getElementById('de-judging').value,
+        threads: parseInt(document.getElementById('de-threads').value) || 6,
+        multipleEntities: document.getElementById('de-multiple').checked
+    };
+    
+    // 4. Send Request
+    const formData = new FormData();
+    formData.append('source_zip', fileInput.files[0]);
+    formData.append('config', JSON.stringify(config));
+    
+    try {
+        const response = await fetch('/omniextract/api/run_doc_extraction_demo', {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (response.status === 429) {
+            resultDiv.innerHTML = `
+                <div style="background-color: #fffbeb; border: 1px solid #f59e0b; padding: 15px; border-radius: 8px; margin-top: 15px;">
+                    <h4 style="color: #b45309; margin-top: 0;"><i class="fas fa-exclamation-triangle"></i> Limit Exceeded</h4>
+                    <p style="color: #b45309;">今天服务处理次数已超过上线，请用户明天再使用或安装本地版本使用</p>
+                </div>
+            `;
+            return;
+        }
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.detail || 'Unknown error occurred');
+        }
+        
+        const result = await response.json();
+
+        resultDiv.innerHTML = `
+            <div style="background-color: #ecfdf5; border: 1px solid #10b981; padding: 15px; border-radius: 8px; margin-top: 15px;">
+                <h4 style="color: #047857; margin-top: 0; margin-bottom: 10px;"><i class="fas fa-check-circle"></i> Task Started Successfully!</h4>
+                <p style="color: #065f46; margin: 0 0 10px 0;">Task ID: <strong>${result.task_id}</strong></p>
+                <p style="color: #065f46; margin: 0;">The task is now running in the background. Once completed, the results will be sent to your provided email address.</p>
+            </div>
+        `;
+        
+    } catch (error) {
+        resultDiv.innerHTML = `
+            <div style="background-color: #fef2f2; border: 1px solid #ef4444; padding: 15px; border-radius: 8px; margin-top: 15px;">
+                <h4 style="color: #b91c1c; margin-top: 0;"><i class="fas fa-exclamation-circle"></i> Error</h4>
+                <p style="color: #b91c1c;">${error.message}</p>
+            </div>
+        `;
+    }
+});
+</script>
+
+{% endblock %}

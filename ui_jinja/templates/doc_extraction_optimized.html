@@ -1,0 +1,501 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h2 class="module-title">Document Extraction - Optimized</h2>
+
+<form id="doc-extraction-optimized-form" class="module-container">
+  <div class="section-container">
+    <h3 class="section-title">Contact Email</h3>
+    <div class="form-group">
+      <label class="form-label" for="optim-contact-email">Contact Email</label>
+      <input id="optim-contact-email" name="contact_email" class="form-input email-input" type="email" placeholder="Enter your email address" />
+      <small class="form-hint">This email will be used for notifications about this task</small>
+      <div class="email-error" style="display:none;color:#dc2626;font-size:13px;margin-top:4px;"></div>
+    </div>
+  </div>
+
+  <!-- Task Name -->
+  <div class="section-container">
+    <h3 class="section-title">Task Name</h3>
+    <div class="form-group">
+      <label class="form-label" for="task-name-optimized">Task Name</label>
+      <input id="task-name-optimized" class="form-input" placeholder="Enter a name for this task" />
+      <small class="form-hint">Provide a descriptive name for this optimized extraction task</small>
+    </div>
+  </div>
+
+
+
+  <!-- Upload Configuration Package -->
+  <div class="section-container">
+    <h3 class="section-title">Upload Configuration Package</h3>
+    <div class="form-group">
+      <label class="form-label" for="optim-source-zip">Upload Zip File</label>
+      <div class="file-upload-wrapper">
+        <input type="file" id="optim-source-zip" name="optim_source_zip" class="file-upload-input" accept=".zip" />
+        <div class="file-upload-box">
+          <i class="fas fa-cloud-upload-alt file-upload-icon"></i>
+          <p class="file-upload-text">Click to upload or drag and drop</p>
+          <p class="file-upload-hint">ZIP file only (Must contain optim_settings.json & optim_prompt.json)</p>
+          <div id="optim-file-name-display" style="display:none; margin-top: 10px; font-weight: 500; color: #374151;"></div>
+        </div>
+      </div>
+      <div id="optim-validation-result" style="margin-top: 15px; color: #666; font-size: 14px; text-align: center;"></div>
+    </div>
+  </div>
+
+  <!-- File Type Configuration -->
+  <div class="section-container">
+    <h3 class="section-title">File Type Configuration</h3>
+    <div class="form-group">
+      <label class="form-label" for="optim-file-type">File Type</label>
+      <select id="optim-file-type" class="form-select">
+        <option value="PDF">PDF</option>
+        <option value="scienceDirect">ScienceDirect</option>
+        <option value="PMC">PMC</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Upload File Package (Data) -->
+  <div class="section-container">
+    <h3 class="section-title">Upload File Package</h3>
+    <div class="form-group">
+      <label class="form-label" for="optim-data-zip">Upload Zip File</label>
+      <div class="file-upload-wrapper">
+        <input type="file" id="optim-data-zip" name="optim_data_zip" class="file-upload-input" accept=".zip" />
+        <div class="file-upload-box">
+          <i class="fas fa-cloud-upload-alt file-upload-icon"></i>
+          <p class="file-upload-text">Click to upload or drag and drop</p>
+          <p class="file-upload-hint">ZIP file only (Max 30 PDFs/XMLs)</p>
+          <div id="optim-data-file-name-display" style="display:none; margin-top: 10px; font-weight: 500; color: #374151;"></div>
+        </div>
+      </div>
+      <div id="optim-data-validation-result" style="margin-top: 15px; color: #666; font-size: 14px; text-align: center;"></div>
+    </div>
+  </div>
+
+  <!-- Conversion Mode -->
+  <div class="section-container">
+    <h3 class="section-title">Conversion Mode</h3>
+    <div class="form-group">
+      <label class="form-label" for="optim-convert-mode">Conversion Mode</label>
+      <select id="optim-convert-mode" class="form-select">
+        <option value="byPart">By Part (divide document by article parts)</option>
+        <option value="wholeDoc">Whole Document (convert entire document as one)</option>
+      </select>
+    </div>
+  </div>
+
+  <style>
+    .file-upload-wrapper {
+      position: relative;
+      width: 100%;
+      height: 150px;
+      border: 2px dashed #e5e7eb;
+      border-radius: 8px;
+      transition: all 0.3s ease;
+      background-color: #f9fafb;
+      cursor: pointer;
+    }
+    .file-upload-wrapper:hover {
+      border-color: #3b82f6;
+      background-color: #eff6ff;
+    }
+    .file-upload-wrapper.drag-over {
+      border-color: #2563eb;
+      background-color: #dbeafe;
+    }
+    .file-upload-input {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      top: 0;
+      left: 0;
+      opacity: 0;
+      cursor: pointer;
+      z-index: 10;
+    }
+    .file-upload-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      pointer-events: none;
+    }
+    .file-upload-icon {
+      font-size: 32px;
+      color: #9ca3af;
+      margin-bottom: 8px;
+    }
+    .file-upload-text {
+      margin: 0;
+      font-size: 14px;
+      color: #4b5563;
+      font-weight: 500;
+    }
+    .file-upload-hint {
+      margin: 4px 0 0;
+      font-size: 12px;
+      color: #9ca3af;
+    }
+  </style>
+
+  <!-- Evaluation Settings -->
+  <div class="section-container">
+    <h3 class="section-title">Evaluation Settings</h3>
+    <div class="form-group">
+      <label class="form-label" for="optim-judging">Judging Mode</label>
+      <select id="optim-judging" class="form-select">
+        <option value="">None</option>
+        <option value="confidence">Confidence</option>
+        <option value="score">Score</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Processing Settings -->
+  <div class="section-container">
+    <h3 class="section-title">Processing Settings</h3>
+    <div class="form-group">
+      <label class="form-label" for="optim-threads">Threads</label>
+      <input id="optim-threads" class="form-input" type="number" placeholder="6" value="6" />
+    </div>
+  </div>
+
+  <!-- Action Buttons -->
+  <div class="form-actions">
+    <button id="optim-start-extraction" class="btn btn-primary" style="height:38px; padding:0 20px; margin-right: 10px;">Start Optimized Extraction</button>
+    <button id="btn-export-config" class="btn" style="background-color: #10b981; color: white; margin-right: 10px; height:38px; padding:0 20px;">Export Config</button>
+    <button id="btn-load-config" class="btn" style="background-color: #3b82f6; color: white; height:38px; padding:0 20px;">Load Config</button>
+    <input type="file" id="file-load-config" style="display: none;" accept=".json">
+    <div id="optim-extraction-results" style="margin-top:20px"></div>
+  </div>
+</form>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    
+    // File Upload and Validation
+    document.getElementById('optim-source-zip').addEventListener('change', function(event) {
+        var file = event.target.files[0];
+        var fileNameDisplay = document.getElementById('optim-file-name-display');
+        var resultDiv = document.getElementById('optim-validation-result');
+
+        if (!file) {
+            fileNameDisplay.style.display = 'none';
+            return;
+        }
+
+        // Display selected file name
+        fileNameDisplay.textContent = file.name;
+        fileNameDisplay.style.display = 'block';
+
+        resultDiv.innerHTML = 'Validating... <i class="fas fa-spinner fa-spin"></i>';
+
+        JSZip.loadAsync(file).then(function(zip) {
+            var foundFiles = new Set();
+            var invalidFiles = [];
+            
+            zip.forEach(function (relativePath, zipEntry) {
+                // Ignore directories and hidden files/macOS artifacts
+                if (!zipEntry.dir && !relativePath.startsWith('__MACOSX') && !relativePath.split('/').pop().startsWith('.')) {
+                    var fileName = relativePath.split('/').pop(); // Get simple filename
+                    if (fileName === 'optim_settings.json' || fileName === 'optim_prompt.json') {
+                        foundFiles.add(fileName);
+                    } else {
+                        invalidFiles.push(fileName);
+                    }
+                }
+            });
+
+            var errors = [];
+            if (!foundFiles.has('optim_settings.json')) {
+                errors.push("Missing required file: optim_settings.json");
+            }
+            if (!foundFiles.has('optim_prompt.json')) {
+                errors.push("Missing required file: optim_prompt.json");
+            }
+            if (invalidFiles.length > 0) {
+                errors.push("Contains invalid files: " + invalidFiles.join(", ") + ". Only optim_settings.json and optim_prompt.json are allowed.");
+            }
+
+            if (errors.length === 0) {
+                resultDiv.innerHTML = '<div style="color: #059669; background-color: #d1fae5; padding: 10px; border-radius: 6px; display: inline-block;">' + 
+                                      '<i class="fas fa-check-circle"></i> Validation Passed! Ready for extraction.<br></div>';
+            } else {
+                // Clear the file input
+                event.target.value = ''; 
+                fileNameDisplay.style.display = 'none';
+                resultDiv.innerHTML = '<div style="color: #dc2626; background-color: #fee2e2; padding: 10px; border-radius: 6px; display: inline-block;">' + 
+                                      '<i class="fas fa-times-circle"></i> Validation Failed!<br>' +
+                                      '<small>' + errors.join("<br>") + '</small></div>';
+            }
+
+        }, function (e) {
+            event.target.value = '';
+            fileNameDisplay.style.display = 'none';
+            resultDiv.innerHTML = '<div style="color: #dc2626; background-color: #fee2e2; padding: 10px; border-radius: 6px; display: inline-block;">' + 
+                                  'Error reading zip file: ' + e.message + '</div>';
+        });
+    });
+
+    // Data File Upload and Validation (PDF/XML)
+    document.getElementById('optim-data-zip').addEventListener('change', function(event) {
+        var file = event.target.files[0];
+        var fileNameDisplay = document.getElementById('optim-data-file-name-display');
+        var resultDiv = document.getElementById('optim-data-validation-result');
+
+        if (!file) {
+            fileNameDisplay.style.display = 'none';
+            return;
+        }
+
+        // Display selected file name
+        fileNameDisplay.textContent = file.name;
+        fileNameDisplay.style.display = 'block';
+
+        resultDiv.innerHTML = 'Validating... <i class="fas fa-spinner fa-spin"></i>';
+
+        JSZip.loadAsync(file).then(function(zip) {
+            var fileCount = 0;
+            var validFileCount = 0;
+            var invalidFiles = [];
+            
+            zip.forEach(function (relativePath, zipEntry) {
+                // Ignore directories and hidden files (starting with . or __MACOSX)
+                if (!zipEntry.dir && !relativePath.startsWith('__MACOSX') && !relativePath.split('/').pop().startsWith('.')) {
+                    fileCount++;
+                    var lowerPath = relativePath.toLowerCase();
+                    if (lowerPath.endsWith('.pdf') || lowerPath.endsWith('.xml')) {
+                        validFileCount++;
+                    } else {
+                        invalidFiles.push(relativePath);
+                    }
+                }
+            });
+
+            var errors = [];
+            if (validFileCount === 0) {
+                errors.push("No PDF or XML files found.");
+            }
+            if (invalidFiles.length > 0) {
+                errors.push("Contains invalid files (" + invalidFiles.length + "): " + invalidFiles.slice(0, 3).join(", ") + (invalidFiles.length > 3 ? "..." : ""));
+            }
+            if (fileCount > 30) {
+                errors.push("Too many files (" + fileCount + "). Max allowed is 30.");
+            }
+
+            if (errors.length === 0) {
+                resultDiv.innerHTML = '<div style="color: #059669; background-color: #d1fae5; padding: 10px; border-radius: 6px; display: inline-block;">' + 
+                                      '<i class="fas fa-check-circle"></i> Validation Passed! Ready for upload.<br>' +
+                                      '<small style="color: #047857;">Total files: ' + fileCount + ' (PDF/XML)</small></div>';
+            } else {
+                // Clear the file input if validation fails so it won't be uploaded
+                event.target.value = ''; 
+                fileNameDisplay.style.display = 'none';
+                resultDiv.innerHTML = '<div style="color: #dc2626; background-color: #fee2e2; padding: 10px; border-radius: 6px; display: inline-block;">' + 
+                                      '<i class="fas fa-times-circle"></i> Validation Failed!<br>' +
+                                      '<small>' + errors.join("<br>") + '</small></div>';
+            }
+
+        }, function (e) {
+            event.target.value = '';
+            fileNameDisplay.style.display = 'none';
+            resultDiv.innerHTML = '<div style="color: #dc2626; background-color: #fee2e2; padding: 10px; border-radius: 6px; display: inline-block;">' + 
+                                  'Error reading zip file: ' + e.message + '</div>';
+        });
+    });
+
+    // Drag and drop visual feedback
+    var uploadWrapper = document.querySelector('.file-upload-wrapper');
+    var uploadInput = document.querySelector('.file-upload-input');
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+        uploadInput.addEventListener(eventName, function() {
+            uploadWrapper.classList.add('drag-over');
+        }, false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        uploadInput.addEventListener(eventName, function() {
+            uploadWrapper.classList.remove('drag-over');
+        }, false);
+    });
+
+    // Start Extraction
+    document.getElementById('optim-start-extraction').addEventListener('click', async function(e) {
+        e.preventDefault();
+        
+        const resultDiv = document.getElementById('optim-extraction-results');
+        resultDiv.innerHTML = ''; // Clear previous results
+
+        if (typeof validateEmailInputById === 'function') {
+            var emailValid = validateEmailInputById('optim-contact-email');
+            if (!emailValid) {
+                return;
+            }
+        }
+
+        // Get file inputs
+        const configZipInput = document.getElementById('optim-source-zip');
+        const dataZipInput = document.getElementById('optim-data-zip');
+
+        if (!configZipInput.files[0]) {
+            alert('Please upload a Configuration Package.');
+            return;
+        }
+        if (!dataZipInput.files[0]) {
+            alert('Please upload a File Package (Data).');
+            return;
+        }
+
+        const taskName = document.getElementById('task-name-optimized').value.trim();
+        if (!taskName) {
+            alert('Please enter a Task Name.');
+            return;
+        }
+
+        try {
+            const zip = await JSZip.loadAsync(configZipInput.files[0]);
+            let settingsEntry = null;
+            zip.forEach(function(relativePath, zipEntry) {
+                if (!zipEntry.dir) {
+                    const fileName = relativePath.split('/').pop();
+                    if (fileName === 'optim_settings.json') {
+                        settingsEntry = zipEntry;
+                    }
+                }
+            });
+            if (settingsEntry) {
+                const settingsText = await settingsEntry.async('string');
+                const settings = JSON.parse(settingsText);
+                const inputFields = Array.isArray(settings.inputFields) ? settings.inputFields : [];
+                const outputFields = Array.isArray(settings.outputFields) ? settings.outputFields : [];
+                const hasEmptyInputName = inputFields.some(function(field) { return !field.name; });
+                const hasEmptyOutputName = outputFields.some(function(field) { return !field.name; });
+                if (hasEmptyInputName || hasEmptyOutputName) {
+                    alert('Field name in optim_settings.json cannot be empty. Please check configuration.');
+                    return;
+                }
+            }
+        } catch (error) {
+            alert('Error reading configuration package: ' + error.message);
+            return;
+        }
+
+        resultDiv.innerHTML = '<div style="color: #2563eb;"><i class="fas fa-spinner fa-spin"></i> Processing...</div>';
+        
+        // Collect Data
+        const config = {
+            taskName: taskName,
+            contactEmail: document.getElementById('optim-contact-email').value,
+            fileType: document.getElementById('optim-file-type').value,
+            convertMode: document.getElementById('optim-convert-mode').value,
+            judging: document.getElementById('optim-judging').value,
+            threads: document.getElementById('optim-threads').value
+        };
+
+        const formData = new FormData();
+        formData.append('config_zip', configZipInput.files[0]);
+        formData.append('source_zip', dataZipInput.files[0]);
+        formData.append('config', JSON.stringify(config));
+
+        try {
+            const response = await fetch('/omniextract/api/run_doc_extraction_optimized_demo', {
+                method: 'POST',
+                body: formData
+            });
+            
+            if (response.status === 429) {
+                resultDiv.innerHTML = `
+                    <div style="background-color: #fffbeb; border: 1px solid #f59e0b; padding: 15px; border-radius: 8px; margin-top: 15px;">
+                        <h4 style="color: #b45309; margin-top: 0;"><i class="fas fa-exclamation-triangle"></i> Limit Exceeded</h4>
+                        <p style="color: #b45309;">今天服务处理次数已超过上线，请用户明天再使用或安装本地版本使用</p>
+                    </div>
+                `;
+                return;
+            }
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || 'Unknown error occurred');
+            }
+            
+            const result = await response.json();
+            
+            resultDiv.innerHTML = `
+                <div style="background-color: #ecfdf5; border: 1px solid #10b981; padding: 15px; border-radius: 8px; margin-top: 15px;">
+                    <h4 style="color: #047857; margin-top: 0; margin-bottom: 10px;"><i class="fas fa-check-circle"></i> Task Started Successfully!</h4>
+                    <p style="color: #065f46; margin: 0 0 10px 0;">Task ID: <strong>${result.task_id}</strong></p>
+                    <p style="color: #065f46; margin: 0;">The task is now running in the background. Once completed, the results will be sent to your provided email address.</p>
+                </div>
+            `;
+            
+        } catch (error) {
+            resultDiv.innerHTML = `
+                <div style="background-color: #fef2f2; border: 1px solid #ef4444; padding: 15px; border-radius: 8px; margin-top: 15px;">
+                    <h4 style="color: #b91c1c; margin-top: 0;"><i class="fas fa-exclamation-circle"></i> Error</h4>
+                    <p style="color: #b91c1c;">${error.message}</p>
+                </div>
+            `;
+        }
+    });
+
+    // Export Config
+    document.getElementById('btn-export-config').addEventListener('click', function(e) {
+        e.preventDefault();
+        
+        const config = {
+            taskName: document.getElementById('task-name-optimized').value,
+            fileType: document.getElementById('optim-file-type').value,
+            convertMode: document.getElementById('optim-convert-mode').value,
+            judging: document.getElementById('optim-judging').value,
+            threads: document.getElementById('optim-threads').value
+        };
+        
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(config, null, 2));
+        const downloadAnchorNode = document.createElement('a');
+        downloadAnchorNode.setAttribute("href", dataStr);
+        downloadAnchorNode.setAttribute("download", "doc_extraction_optimized_config.json");
+        document.body.appendChild(downloadAnchorNode);
+        downloadAnchorNode.click();
+        downloadAnchorNode.remove();
+    });
+
+    // Load Config Button Click
+    document.getElementById('btn-load-config').addEventListener('click', function(e) {
+        e.preventDefault();
+        document.getElementById('file-load-config').click();
+    });
+
+    // Handle File Selection for Load Config
+    document.getElementById('file-load-config').addEventListener('change', function(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const config = JSON.parse(e.target.result);
+                
+                if (config.taskName !== undefined) document.getElementById('task-name-optimized').value = config.taskName;
+                if (config.fileType !== undefined) document.getElementById('optim-file-type').value = config.fileType;
+                if (config.convertMode !== undefined) document.getElementById('optim-convert-mode').value = config.convertMode;
+                if (config.judging !== undefined) document.getElementById('optim-judging').value = config.judging;
+                if (config.threads !== undefined) document.getElementById('optim-threads').value = config.threads;
+                
+                // Clear the file input so the same file can be selected again if needed
+                event.target.value = '';
+                
+            } catch (error) {
+                alert('Error parsing configuration file: ' + error.message);
+            }
+        };
+        reader.readAsText(file);
+    });
+
+});
+</script>
+{% endblock %}
