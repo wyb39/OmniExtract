@@ -626,7 +626,7 @@ document.addEventListener('DOMContentLoaded', function() {
         formData.append('config', JSON.stringify(config));
 
         // Send Request
-        fetch('/omniextract/api/run_table_extraction_demo', {
+        fetch('/omniextract/api/run_workflow_table_extraction', {
             method: 'POST',
             body: formData
         })
@@ -640,8 +640,8 @@ document.addEventListener('DOMContentLoaded', function() {
             if (data.status_code === 200) {
                 resultsDisplay.innerHTML = `
                     <div style="background-color: #ecfdf5; border: 1px solid #10b981; padding: 15px; border-radius: 8px; margin-top: 15px;">
-                        <h4 style="color: #047857; margin-top: 0; margin-bottom: 10px;"><i class="fas fa-check-circle"></i> Task Started Successfully!</h4>
-                        <p style="color: #065f46; margin: 0 0 10px 0;">Task ID: <strong>${data.task_id}</strong></p>
+                        <h4 style="color: #047857; margin-top: 0; margin-bottom: 10px;"><i class="fas fa-check-circle"></i> Workflow Started Successfully!</h4>
+                        <p style="color: #065f46; margin: 0 0 10px 0;">Workflow ID: <strong>${data.workflow_id}</strong></p>
                         <p style="color: #065f46; margin: 0;">The task is now running in the background. Once completed, the results will be sent to your provided email address.</p>
                     </div>
                 `;

@@ -1,0 +1,337 @@
+"""Background workflow implementations used by the web API.
+
+The workflows intentionally call the same service functions as the CLI.  PDF
+input therefore follows the production Hybrid/OpenDoc parser configured in
+``articleUtil``; there is no separate parser-specific web path here.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import shutil
+import zipfile
+from datetime import datetime, timezone
+from typing import Any, Callable, Dict, Iterable, List
+
+from loguru import logger
+
+from evalUtil import PredictionSettings
+from optimUtil import DspyField, OptimSettings
+from service import (
+    build_optm_set,
+    extract_table_service,
+    file_to_json,
+    optim_custom,
+    parse_table_to_tsv,
+    pred,
+)
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _write_status(base_path: str, status: str, **details: Any) -> None:
+    os.makedirs(base_path, exist_ok=True)
+    payload = {"status": status, "updated_at": _now(), **details}
+    with open(os.path.join(base_path, "workflow_status.json"), "w", encoding="utf-8") as handle:
+        json.dump(payload, handle, ensure_ascii=False, indent=2, default=str)
+
+
+def _notify(
+    workflow_type: str,
+    contact_email: str,
+    task_name: str,
+    result: Dict[str, Any],
+    attachments: Iterable[str] = (),
+) -> None:
+    if not contact_email:
+        return
+    try:
+        from workflow_notifications import send_workflow_notification
+
+        send_workflow_notification(
+            recipient_email=contact_email,
+            workflow_type=workflow_type,
+            task_name=task_name,
+            result=result,
+            attachment_paths=list(attachments),
+        )
+    except Exception as exc:  # notification failure must not fail a workflow
+        logger.warning("Workflow notification failed: {}", exc)
+
+
+def _safe_extract(
+    archive_path: str,
+    target_dir: str,
+    allowed_extensions: Iterable[str] | None = None,
+) -> List[str]:
+    """Extract an uploaded archive without allowing path traversal."""
+
+    allowed = {ext.lower() for ext in allowed_extensions} if allowed_extensions else None
+    extracted: List[str] = []
+    os.makedirs(target_dir, exist_ok=True)
+    with zipfile.ZipFile(archive_path, "r") as archive:
+        bad_file = archive.testzip()
+        if bad_file:
+            raise zipfile.BadZipFile(f"Corrupt file in archive: {bad_file}")
+        root = os.path.abspath(target_dir)
+        for info in archive.infolist():
+            if info.is_dir():
+                continue
+            filename = os.path.basename(info.filename)
+            if not filename or filename.startswith(".") or "__MACOSX" in info.filename:
+                continue
+            extension = os.path.splitext(filename)[1].lower()
+            if allowed is not None and extension not in allowed:
+                continue
+            destination = os.path.abspath(os.path.join(root, filename))
+            if os.path.commonpath([root, destination]) != root:
+                raise ValueError("Archive contains an unsafe path")
+            with archive.open(info) as source, open(destination, "wb") as target:
+                shutil.copyfileobj(source, target)
+            extracted.append(destination)
+    return extracted
+
+
+def _transform_field(field_data: Dict[str, Any]) -> Dict[str, Any]:
+    field = {
+        "name": field_data.get("name"),
+        "field_type": field_data.get("type", field_data.get("field_type", "str")),
+        "description": field_data.get("description", ""),
+    }
+    if field_data.get("hasRange") or "range_min" in field_data or "range_max" in field_data:
+        for frontend_key, model_key in (("rangeMin", "range_min"), ("rangeMax", "range_max")):
+            value = field_data.get(frontend_key, field_data.get(model_key))
+            if value not in (None, ""):
+                try:
+                    field[model_key] = float(value)
+                except (TypeError, ValueError):
+                    raise ValueError(f"Invalid numeric value for {frontend_key}")
+    literal_value = field_data.get("literalList", field_data.get("literal_list"))
+    if field_data.get("hasLiteral") or literal_value:
+        if isinstance(literal_value, str):
+            literal_value = [item.strip() for item in literal_value.split(",") if item.strip()]
+        field["literal_list"] = literal_value or []
+    return field
+
+
+def _fields(values: Iterable[Dict[str, Any]]) -> List[DspyField]:
+    return [DspyField(**_transform_field(value)) for value in values]
+
+
+def _zip_files(source_dir: str, archive_path: str) -> str:
+    archive_absolute = os.path.abspath(archive_path)
+    with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED) as archive:
+        for root, _, files in os.walk(source_dir):
+            for filename in files:
+                full_path = os.path.join(root, filename)
+                if os.path.abspath(full_path) == archive_absolute:
+                    continue
+                archive.write(full_path, os.path.relpath(full_path, source_dir))
+    return archive_path
+
+
+def _run_workflow(
+    workflow_type: str,
+    task_name: str,
+    contact_email: str,
+    base_path: str,
+    work: Callable[[], Dict[str, Any]],
+    attachments: Callable[[Dict[str, Any]], Iterable[str]] = lambda result: (),
+) -> Dict[str, Any]:
+    workflow_id = os.path.basename(base_path)
+    _write_status(base_path, "running", workflow_id=workflow_id, workflow_type=workflow_type, task_name=task_name)
+    try:
+        result = dict(work())
+        result.setdefault("status", "success")
+        result["workflow_id"] = workflow_id
+        result["task_created_time"] = workflow_id
+        _write_status(base_path, "completed", workflow_id=workflow_id, workflow_type=workflow_type, result=result)
+        _notify(workflow_type, contact_email, task_name, result, attachments(result))
+        return result
+    except Exception as exc:
+        _write_status(base_path, "failed", workflow_id=workflow_id, workflow_type=workflow_type, error=str(exc))
+        _notify(workflow_type, contact_email, task_name, {"status": "failed", "error": str(exc), "workflow_id": workflow_id})
+        logger.exception("{} workflow failed", workflow_type)
+        raise
+
+
+def run_workflow_doc_extraction(
+    task_name: str,
+    contact_email: str,
+    file_type: str,
+    zip_file_path: str,
+    convert_mode: str,
+    input_fields: List[Dict[str, Any]],
+    output_fields: List[Dict[str, Any]],
+    base_path: str,
+    initial_prompt: str = "",
+    judging_mode: str = "confidence",
+    threads: int = 6,
+    multiple_entities: bool = False,
+) -> Dict[str, Any]:
+    def work() -> Dict[str, Any]:
+        source_dir = os.path.join(base_path, "source_file")
+        parsed_dir = os.path.join(base_path, "parsed")
+        target_dir = os.path.join(base_path, "target")
+        _safe_extract(zip_file_path, source_dir, {".pdf", ".xml"})
+        parse_result = file_to_json(source_dir, parsed_dir, file_type, convert_mode)
+        dataset_file = parse_result["details"]["dataset_file"]
+        settings = PredictionSettings(
+            inputFields=_fields(input_fields),
+            outputFields=_fields(output_fields),
+            dataset=dataset_file,
+            save_dir=target_dir,
+            output_file="result.json",
+            task="Extraction",
+            initial_prompt=initial_prompt,
+            judging=judging_mode,
+            threads=threads,
+            multiple=multiple_entities,
+        )
+        prediction_result = pred(settings)
+        result_file = os.path.join(target_dir, "result.json")
+        result_zip = _zip_files(target_dir, os.path.join(target_dir, "result.zip"))
+        return {"result_file": result_file, "result_zip": result_zip, "prediction_result": prediction_result}
+
+    return _run_workflow("doc_extraction", task_name, contact_email, base_path, work, lambda result: [result["result_zip"]])
+
+
+def run_workflow_prompt_optimization(
+    task_name: str,
+    contact_email: str,
+    file_type: str,
+    zip_file_path: str,
+    dataset_file_path: str,
+    convert_mode: str,
+    input_fields: List[Dict[str, Any]],
+    output_fields: List[Dict[str, Any]],
+    base_path: str,
+    initial_prompt: str = "",
+    demos: int = 1,
+    article_field: str = "article_field",
+    multiple_entities: bool = False,
+) -> Dict[str, Any]:
+    def work() -> Dict[str, Any]:
+        source_dir = os.path.join(base_path, "source_file")
+        parsed_dir = os.path.join(base_path, "parsed")
+        optimized_dir = os.path.join(base_path, "optimized_prompt")
+        _safe_extract(zip_file_path, source_dir, {".pdf", ".xml"})
+        file_to_json(source_dir, parsed_dir, file_type, convert_mode)
+        input_dspy_fields = _fields(input_fields)
+        output_dspy_fields = _fields(output_fields)
+        article_parts = [field.name for field in input_dspy_fields] if convert_mode == "byPart" else None
+        build_optm_set(
+            json_path=parsed_dir,
+            dataset=dataset_file_path,
+            save_dir=optimized_dir,
+            fields=output_dspy_fields,
+            multiple=multiple_entities,
+            article_field=article_field,
+            article_parts=article_parts,
+        )
+        optim_dataset = os.path.join(optimized_dir, "_optim_dataset.json")
+        settings = OptimSettings(
+            inputFields=input_dspy_fields,
+            outputFields=output_dspy_fields,
+            dataset=optim_dataset,
+            save_dir=optimized_dir,
+            task="Extraction",
+            initial_prompt=initial_prompt,
+            demos=demos,
+            multiple=multiple_entities,
+            threads=6,
+            ai_evaluation=True,
+        )
+        optimization_result = optim_custom(settings)
+        optimization_zip = _zip_files(optimized_dir, os.path.join(optimized_dir, "optimization_config.zip"))
+        return {"optimized_prompt_dir": optimized_dir, "optimization_config_zip": optimization_zip, "result": optimization_result}
+
+    return _run_workflow("prompt_optimization", task_name, contact_email, base_path, work, lambda result: [result["optimization_config_zip"]])
+
+
+def run_workflow_table_extraction(
+    task_name: str,
+    contact_email: str,
+    file_type: str,
+    zip_file_path: str,
+    output_fields: List[Dict[str, Any]],
+    base_path: str,
+    classify_prompt: str,
+    extract_prompt: str,
+    threads: int = 6,
+) -> Dict[str, Any]:
+    def work() -> Dict[str, Any]:
+        source_dir = os.path.join(base_path, "source_file")
+        parsed_dir = os.path.join(base_path, "parsed")
+        result_dir = os.path.join(base_path, "result")
+        _safe_extract(zip_file_path, source_dir)
+        parse_table_to_tsv(source_dir, parsed_dir, non_tabular_file_format=file_type, verbose=True)
+        extract_table_service(
+            parsed_file_path=parsed_dir,
+            save_folder_path=result_dir,
+            outputFields=_fields(output_fields),
+            classify_prompt=classify_prompt,
+            extract_prompt=extract_prompt,
+            num_threads=threads,
+        )
+        format_tables_dir = os.path.join(result_dir, "format_tables")
+        format_tables_zip = os.path.join(result_dir, "format_tables.zip")
+        if os.path.isdir(format_tables_dir):
+            _zip_files(format_tables_dir, format_tables_zip)
+        return {"result_dir": result_dir, "format_tables_zip": format_tables_zip}
+
+    return _run_workflow("table_extraction", task_name, contact_email, base_path, work, lambda result: [result["format_tables_zip"]])
+
+
+def run_workflow_doc_extraction_optimized(
+    task_name: str,
+    contact_email: str,
+    file_type: str,
+    zip_file_path: str,
+    config_zip_path: str,
+    convert_mode: str,
+    base_path: str,
+    judging_mode: str = "confidence",
+    threads: int = 6,
+) -> Dict[str, Any]:
+    def work() -> Dict[str, Any]:
+        source_dir = os.path.join(base_path, "source_file")
+        parsed_dir = os.path.join(base_path, "parsed")
+        target_dir = os.path.join(base_path, "target")
+        config_dir = os.path.join(base_path, "config")
+        _safe_extract(zip_file_path, source_dir, {".pdf", ".xml"})
+        parse_result = file_to_json(source_dir, parsed_dir, file_type, convert_mode)
+        dataset_file = parse_result["details"]["dataset_file"]
+        _safe_extract(config_zip_path, config_dir)
+        optim_settings_path = _find_file(config_dir, "optim_settings.json")
+        prompt_path = _find_file(config_dir, "optim_prompt.json")
+        with open(optim_settings_path, "r", encoding="utf-8") as handle:
+            settings_data = json.load(handle)
+        prediction_settings = PredictionSettings(
+            inputFields=_fields(settings_data.get("inputFields", [])),
+            outputFields=_fields(settings_data.get("outputFields", [])),
+            dataset=dataset_file,
+            save_dir=target_dir,
+            output_file="result.json",
+            task=settings_data.get("task", "Extraction"),
+            initial_prompt=settings_data.get("initial_prompt", ""),
+            judging=judging_mode,
+            threads=threads,
+            multiple=settings_data.get("multiple", False),
+        )
+        prediction_result = pred(prediction_settings, prompt_dir=prompt_path)
+        result_file = os.path.join(target_dir, "result.json")
+        result_zip = _zip_files(target_dir, os.path.join(target_dir, "result.zip"))
+        return {"result_file": result_file, "result_zip": result_zip, "prediction_result": prediction_result}
+
+    return _run_workflow("doc_extraction_optimized", task_name, contact_email, base_path, work, lambda result: [result["result_zip"]])
+
+
+def _find_file(root_dir: str, filename: str) -> str:
+    for root, _, files in os.walk(root_dir):
+        if filename in files:
+            return os.path.join(root, filename)
+    raise FileNotFoundError(f"{filename} not found in {root_dir}")

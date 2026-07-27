@@ -109,6 +109,7 @@ PyMuPDF==1.28.0
 pyphen==0.17.2
 pyreadline3==3.5.6
 python-dateutil==2.9.0.post0
+python-multipart==0.0.20
 python-dotenv==1.0.1
 python-pptx==1.0.2
 pytz==2025.1

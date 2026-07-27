@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from router import routerTest
 from router import ui_router
+from router import workflow_router
 import baseUtil
 
 
@@ -28,10 +29,18 @@ app.include_router(routerTest.router)
 # Expose the same API under the prefix expected by the Jinja pages while
 # retaining the unprefixed routes for existing clients.
 app.include_router(routerTest.router, prefix="/omniextract")
+app.include_router(workflow_router.router, prefix="/omniextract")
 
 app.mount("/omniextract/assets", StaticFiles(directory=assets_dir), name="omniextract-assets")
 app.include_router(ui_router.root_router)
 app.include_router(ui_router.router, prefix="/omniextract")
+
+
+@app.on_event("startup")
+async def start_workflow_workers():
+    workflow_router.start_workflow_workers()
+
+
 # The Dash application remains the default GUI entry point.  Do not mount it
 # here: this FastAPI app is also used by the CLI service.
 class BaseMap(BaseModel):

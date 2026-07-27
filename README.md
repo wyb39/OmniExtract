@@ -72,6 +72,16 @@ The Jinja2 web UI is also available from the FastAPI service. Start it with
 same API handlers as the existing CLI service and serves the migrated templates
 from `ui_jinja/templates`.
 
+The Jinja pages submit four background workflows under the same prefix:
+`run_workflow_doc_extraction`, `run_workflow_doc_extraction_optimized`,
+`run_workflow_prompt_optimization`, and `run_workflow_table_extraction`.
+Each request returns a `workflow_id`; status is available at
+`/omniextract/api/workflow/{workflow_id}/status`.
+
+Email notifications are optional. Configure `OMNI_EXTRACT_SMTP_SENDER` and
+`OMNI_EXTRACT_SMTP_PASSWORD` (plus the optional SMTP server variables) before
+starting the service to enable them.
+
 For Linux server deployment, set a password to encrypt the model `api_key` and expose the service externally:
 First, modify `gui/app.py` to listen on all interfaces by changing the default host to `0.0.0.0` (replace `os.environ.get("HOST", "127.0.0.1")` with `os.environ.get("HOST", "0.0.0.0")`).
 ```bash
