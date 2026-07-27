@@ -2,5 +2,7 @@
 tmp/
 venv_sync_freeze.txt
 pdf_parsing_experiment/test_pdfs/
+# Experimental PDF parser workspace is maintained locally and is not tracked.
+pdf_parsing_experiment/
 __pycache__/
 *.py[cod]
