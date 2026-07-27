@@ -5,11 +5,11 @@
 
 <form id="doc-extraction-optimized-form" class="module-container">
   <div class="section-container">
-    <h3 class="section-title">Contact Email</h3>
+    <h3 class="section-title">Contact Email (Optional)</h3>
     <div class="form-group">
-      <label class="form-label" for="optim-contact-email">Contact Email</label>
+      <label class="form-label" for="optim-contact-email">Contact Email (Optional)</label>
       <input id="optim-contact-email" name="contact_email" class="form-input email-input" type="email" placeholder="Enter your email address" />
-      <small class="form-hint">This email will be used for notifications about this task</small>
+      <small class="form-hint">Leave blank to use the workflow status link only</small>
       <div class="email-error" style="display:none;color:#dc2626;font-size:13px;margin-top:4px;"></div>
     </div>
   </div>
@@ -429,7 +429,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 <div style="background-color: #ecfdf5; border: 1px solid #10b981; padding: 15px; border-radius: 8px; margin-top: 15px;">
                     <h4 style="color: #047857; margin-top: 0; margin-bottom: 10px;"><i class="fas fa-check-circle"></i> Workflow Started Successfully!</h4>
                     <p style="color: #065f46; margin: 0 0 10px 0;">Workflow ID: <strong>${result.workflow_id}</strong></p>
-                    <p style="color: #065f46; margin: 0;">The task is now running in the background. Once completed, the results will be sent to your provided email address.</p>
+                    <p style="color: #065f46; margin: 0;"><a href="${result.workflow_url}" target="_blank" rel="noopener">Open the workflow status page</a>. It refreshes automatically every 5 minutes.</p>
                 </div>
             `;
             

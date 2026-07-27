@@ -41,7 +41,7 @@
 function validateEmailValue(email) {
   var value = (email || '').trim();
   if (!value) {
-    return { valid: false, message: 'Please enter an email address.' };
+    return { valid: true, message: '' };
   }
   var pattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!pattern.test(value)) {

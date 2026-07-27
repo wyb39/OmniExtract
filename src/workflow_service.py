@@ -148,11 +148,25 @@ def _run_workflow(
         result.setdefault("status", "success")
         result["workflow_id"] = workflow_id
         result["task_created_time"] = workflow_id
-        _write_status(base_path, "completed", workflow_id=workflow_id, workflow_type=workflow_type, result=result)
+        _write_status(
+            base_path,
+            "completed",
+            workflow_id=workflow_id,
+            workflow_type=workflow_type,
+            task_name=task_name,
+            result=result,
+        )
         _notify(workflow_type, contact_email, task_name, result, attachments(result))
         return result
     except Exception as exc:
-        _write_status(base_path, "failed", workflow_id=workflow_id, workflow_type=workflow_type, error=str(exc))
+        _write_status(
+            base_path,
+            "failed",
+            workflow_id=workflow_id,
+            workflow_type=workflow_type,
+            task_name=task_name,
+            error=str(exc),
+        )
         _notify(workflow_type, contact_email, task_name, {"status": "failed", "error": str(exc), "workflow_id": workflow_id})
         logger.exception("{} workflow failed", workflow_type)
         raise

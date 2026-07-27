@@ -75,8 +75,16 @@ from `ui_jinja/templates`.
 The Jinja pages submit four background workflows under the same prefix:
 `run_workflow_doc_extraction`, `run_workflow_doc_extraction_optimized`,
 `run_workflow_prompt_optimization`, and `run_workflow_table_extraction`.
-Each request returns a `workflow_id`; status is available at
-`/omniextract/api/workflow/{workflow_id}/status`.
+Each request returns a `workflow_id` and a tokenized `workflow_url`. Open that
+URL to view the workflow status and download the result when it is ready. The
+page refreshes itself every five minutes, so no browser polling code is needed.
+The JSON status endpoint is available at `/omniextract/api/workflow/{workflow_id}/status`
+when called with the returned token. Result files are served only through the
+tokenized artifact links shown on the status page; local filesystem paths are
+never exposed.
+
+Contact email is optional. If it is omitted, the workflow remains fully usable
+through the returned status URL and does not attempt an email notification.
 
 Email notifications are optional. Configure `OMNI_EXTRACT_SMTP_SENDER` and
 `OMNI_EXTRACT_SMTP_PASSWORD` (plus the optional SMTP server variables) before
