@@ -23,15 +23,19 @@ def _render_runs(runs: list[dict[str, Any]], fallback: str) -> str:
         text = _escape_markdown(str(run.get("text", "")))
         if not text:
             continue
-        if run.get("bold") and text.strip():
+        if text.strip() and (run.get("bold") or run.get("script") in {"sup", "sub"}):
             leading = text[: len(text) - len(text.lstrip())]
             trailing = text[len(text.rstrip()) :]
             core = text.strip()
-            rendered.append(f"{leading}**{core}**{trailing}")
+            script = run.get("script")
+            if script in {"sup", "sub"}:
+                core = f"<{script}>{core}</{script}>"
+            if run.get("bold"):
+                core = f"**{core}**"
+            rendered.append(f"{leading}{core}{trailing}")
         else:
             rendered.append(text)
     value = "".join(rendered)
-    value = re.sub(r"\*\*\s*\*\*", "", value)
     return re.sub(r"\*\*(.*?)\*\*\s+\*\*(.*?)\*\*", r"**\1 \2**", value)
 
 

@@ -35,7 +35,7 @@ The environment was corrected by pinning:
 OpenDoc was added through:
 
 - `openocr-python==0.1.5`
-- `onnxruntime==1.23.2`
+- `onnxruntime-gpu==1.23.2`
 - `PyMuPDF==1.28.0`
 - `opencv-python==4.11.0.86`
 
@@ -45,8 +45,13 @@ Compatibility constraints:
   to upgrade NumPy to 2.x.
 - Keep both OpenCV distributions at `4.11.0.86` because the existing application
   uses `opencv-python-headless`, while OpenOCR declares `opencv-python`.
-- `pip check` reports no broken requirements.
-- The installed ONNX Runtime currently exposes `CPUExecutionProvider`, not CUDA.
+- OpenOCR's package metadata declares the CPU `onnxruntime` distribution, so
+  `pip check` may report it missing when the compatible GPU distribution is
+  installed instead.
+- The installed GPU runtime exposes `CUDAExecutionProvider`; Layout and UniRec
+  sessions have been verified on the RTX 4070 Laptop GPU.
+- PyMuPDF remains installed for other project code, but the PDF parsing
+  experiment now uses `pypdfium2` for rendering and native character geometry.
 
 OpenDoc model files are stored under
 `pdf_parsing_experiment/models/opendoc/` and ignored by Git. The required layout,

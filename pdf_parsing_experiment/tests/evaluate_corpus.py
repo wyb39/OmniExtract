@@ -29,6 +29,19 @@ def main() -> int:
         choices=("native", "auto", "hybrid", "opendoc"),
         default="native",
     )
+    parser.add_argument(
+        "--opendoc-model-dir",
+        type=Path,
+        default=EXPERIMENT_DIR / "models" / "opendoc",
+    )
+    parser.add_argument(
+        "--opendoc-use-gpu",
+        choices=("auto", "true", "false"),
+        default="auto",
+    )
+    parser.add_argument("--opendoc-no-auto-download", action="store_true")
+    parser.add_argument("--opendoc-max-length", type=int, default=2048)
+    parser.add_argument("--opendoc-max-parallel-blocks", type=int, default=4)
     args = parser.parse_args()
 
     pdfs = sorted(args.input.glob("*.pdf"))
@@ -49,12 +62,21 @@ def main() -> int:
                 table_strategy=args.table_strategy,
                 max_pages=args.max_pages,
                 backend=args.backend,
+                opendoc_model_dir=args.opendoc_model_dir,
+                opendoc_use_gpu=args.opendoc_use_gpu,
+                opendoc_auto_download=not args.opendoc_no_auto_download,
+                opendoc_max_length=args.opendoc_max_length,
+                opendoc_max_parallel_blocks=args.opendoc_max_parallel_blocks,
             )
             blocks = [block for page in document.pages for block in page.blocks]
             rendered_tables = sum(
                 block.kind == "table"
                 or (block.kind == "raw_markdown" and "<table" in block.text.lower())
                 for block in blocks
+            )
+            unirec_diagnostics = document.metadata.get(
+                "unirec_region_diagnostics",
+                [],
             )
             entry.update(
                 {
@@ -64,6 +86,24 @@ def main() -> int:
                     "headings": sum(block.kind == "heading" for block in blocks),
                     "tables": rendered_tables,
                     "warnings": document.warnings,
+                    "layout_provider": document.metadata.get("layout_provider"),
+                    "layout_seconds": document.metadata.get("layout_seconds"),
+                    "unirec_seconds": document.metadata.get("selective_unirec_seconds"),
+                    "unirec_max_region_seconds": max(
+                        (
+                            float(item.get("seconds", 0.0))
+                            for item in unirec_diagnostics
+                        ),
+                        default=0.0,
+                    ),
+                    "unirec_stop_reasons": document.metadata.get(
+                        "unirec_stop_reasons",
+                        {},
+                    ),
+                    "opendoc_max_length": args.opendoc_max_length,
+                    "opendoc_max_parallel_blocks": (
+                        args.opendoc_max_parallel_blocks
+                    ),
                 }
             )
         except Exception as exc:

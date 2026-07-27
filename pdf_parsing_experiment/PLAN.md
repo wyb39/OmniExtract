@@ -1,5 +1,24 @@
 # PDF 到 Markdown 解析流程实施计划
 
+## 当前架构决策（2026-07-26）
+
+以下决策覆盖本文后续章节中关于旧版 native-first 和表格融合策略的历史描述：
+
+1. `auto` / `hybrid` 必须先完成整篇 PDF 所有页面的 PP-DocLayoutV2，
+   然后才开始原生字符提取和区域填充。
+2. PDF 页面渲染及原生字符坐标统一由 `pypdfium2` 提供；hybrid 和完整
+   OpenDoc PDF 路径均不得调用 PyMuPDF。
+3. PP-DocLayoutV2 检测为 `table` 的区域默认交给 UniRec，不再调用
+   pdfplumber 表格检测。仅当机器生成 PDF 的超大表格存在稳定原生网格且预计超过
+   UniRec token 容量时，使用 PDFium 字符网格容量兜底。
+4. `pdfplumber` 仅保留在显式 `native` 对照后端，不参与 `auto` /
+   `hybrid` 主流程。
+5. `auto` 的失败回退使用同样由 PDFium 提供图像的完整 OpenDoc，不再
+   回退到 native-first。
+6. Debug JSON 必须记录 `renderer=pypdfium2`、
+   `native_text_provider=pypdfium2`、`table_provider=unirec`，以及逐区域
+   UniRec 耗时、token 数、停止原因、旋转和容量兜底状态。
+
 ## 1. 目标
 
 基于 `pypdf`、`pdfplumber` 和 OpenDoc 构建面向 LLM 的 PDF 到 Markdown 解析流程。

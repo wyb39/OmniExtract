@@ -1,0 +1,4 @@
+.venv/
+tmp/
+venv_sync_freeze.txt
+pdf_parsing_experiment/test_pdfs/

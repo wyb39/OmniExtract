@@ -1,19 +1,22 @@
 """Compact, layout-aware PDF to Markdown experiment.
 
 The module intentionally keeps extraction, normalization, and layout heuristics
-in one place.  pdfplumber supplies character geometry and tables; pypdf supplies
-metadata and a text fallback for pages without a usable character layer.
+in one place.  The hybrid backend uses PDFium for rendering and native character
+geometry, OpenDoc for layout and selective recognition, and pypdf for metadata.
+The explicit native backend retains pdfplumber extraction for comparison.
 """
 
 from __future__ import annotations
 
 import argparse
+import ctypes
 import json
 import math
 import re
-import tempfile
+import sys
 import time
-from collections import Counter
+from collections import Counter, defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass, field, replace
 from difflib import SequenceMatcher
 from pathlib import Path
@@ -226,14 +229,32 @@ def _line_from_chars(chars: list[dict[str, Any]]) -> dict[str, Any] | None:
     bold_chars = 0
     visible_chars = 0
 
-    def append_piece(piece: str, bold: bool) -> None:
+    def append_piece(piece: str, bold: bool, script: str | None = None) -> None:
         if not piece:
             return
-        if runs and runs[-1]["bold"] == bold:
+        if (
+            runs
+            and runs[-1].get("bold") == bold
+            and runs[-1].get("script") == script
+        ):
             runs[-1]["text"] += piece
         else:
-            runs.append({"text": piece, "bold": bold})
+            runs.append({"text": piece, "bold": bold, "script": script})
         parts.append(piece)
+
+    def trim_space_before_script() -> None:
+        while parts and parts[-1].isspace():
+            parts.pop()
+        if parts:
+            parts[-1] = parts[-1].rstrip()
+            if not parts[-1]:
+                parts.pop()
+        while runs and not str(runs[-1].get("text", "")).rstrip():
+            runs.pop()
+        if runs:
+            runs[-1]["text"] = str(runs[-1].get("text", "")).rstrip()
+            if not runs[-1]["text"]:
+                runs.pop()
 
     for char in ordered:
         value = str(char.get("text", ""))
@@ -243,11 +264,14 @@ def _line_from_chars(chars: list[dict[str, Any]]) -> dict[str, Any] | None:
         x1 = float(char.get("x1", x0))
         size = float(char.get("size", previous_size) or previous_size)
         bold = _is_bold(str(char.get("fontname", "")))
-        if previous_x1 is not None and not value.isspace():
+        script = str(char.get("script", "") or "") or None
+        if script is not None:
+            trim_space_before_script()
+        if previous_x1 is not None and not value.isspace() and script is None:
             gap = x0 - previous_x1
             if gap > max(1.2, min(previous_size, size) * 0.22) and (not parts or not parts[-1].endswith(" ")):
-                append_piece(" ", False)
-        append_piece(value, bold)
+                append_piece(" ", False, None)
+        append_piece(value, bold, script)
         nonspace = sum(not character.isspace() for character in value)
         visible_chars += nonspace
         bold_chars += nonspace if bold else 0
@@ -261,7 +285,13 @@ def _line_from_chars(chars: list[dict[str, Any]]) -> dict[str, Any] | None:
     for run in runs:
         run_text = re.sub(r" {2,}", " ", run["text"])
         if run_text:
-            cleaned_runs.append({"text": run_text, "bold": bool(run["bold"])})
+            cleaned_runs.append(
+                {
+                    "text": run_text,
+                    "bold": bool(run["bold"]),
+                    "script": run.get("script"),
+                }
+            )
     sizes = [float(char.get("size", 0.0) or 0.0) for char in ordered if str(char.get("text", "")).strip()]
     return {
         "text": text,
@@ -339,6 +369,104 @@ def _split_visual_line(
     return refined
 
 
+def _attach_script_groups(groups: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Attach small vertically shifted glyph groups to their dominant text line."""
+
+    def metrics(group: dict[str, Any]) -> dict[str, float] | None:
+        visible = [
+            char
+            for char in group["chars"]
+            if str(char.get("text", "")).strip()
+        ]
+        if not visible:
+            return None
+        sizes = [float(char.get("size", 0.0) or 0.0) for char in visible]
+        tops = [float(char.get("top", 0.0)) for char in visible]
+        bottoms = [float(char.get("bottom", 0.0)) for char in visible]
+        return {
+            "size": median(sizes),
+            "top": median(tops),
+            "bottom": median(bottoms),
+            "center": median(
+                (float(char.get("top", 0.0)) + float(char.get("bottom", 0.0)))
+                / 2
+                for char in visible
+            ),
+            "x0": min(float(char.get("x0", 0.0)) for char in visible),
+            "x1": max(float(char.get("x1", 0.0)) for char in visible),
+        }
+
+    group_metrics = [metrics(group) for group in groups]
+    assignments: dict[int, list[tuple[int, str | None]]] = defaultdict(list)
+    attached: set[int] = set()
+    for index, source in enumerate(group_metrics):
+        if source is None or source["size"] <= 0:
+            continue
+        candidates: list[tuple[float, int, dict[str, float]]] = []
+        source_height = max(source["bottom"] - source["top"], 0.1)
+        for target_index, target in enumerate(group_metrics):
+            if target_index == index or target is None:
+                continue
+            size_ratio = source["size"] / max(target["size"], 0.1)
+            if not 0.45 <= size_ratio <= 0.86:
+                continue
+            target_height = max(target["bottom"] - target["top"], 0.1)
+            vertical_overlap = max(
+                0.0,
+                min(source["bottom"], target["bottom"])
+                - max(source["top"], target["top"]),
+            )
+            if vertical_overlap / min(source_height, target_height) < 0.35:
+                continue
+            center_delta = abs(source["center"] - target["center"])
+            if center_delta > target["size"] * 0.58:
+                continue
+            horizontal_gap = max(
+                target["x0"] - source["x1"],
+                source["x0"] - target["x1"],
+                0.0,
+            )
+            if horizontal_gap > target["size"] * 1.5:
+                continue
+            candidates.append((center_delta, target_index, target))
+        if not candidates:
+            continue
+        _, target_index, target = min(candidates, key=lambda item: item[0])
+        offset = source["center"] - target["center"]
+        if (
+            offset < -target["size"] * 0.10
+            and source["bottom"] < target["bottom"] - target["size"] * 0.08
+        ):
+            script: str | None = "sup"
+        elif (
+            offset > target["size"] * 0.10
+            and source["bottom"] > target["bottom"] + target["size"] * 0.04
+        ):
+            script = "sub"
+        else:
+            script = None
+        assignments[target_index].append((index, script))
+        attached.add(index)
+
+    merged: list[dict[str, Any]] = []
+    for index, group in enumerate(groups):
+        if index in attached:
+            continue
+        chars = list(group["chars"])
+        for source_index, script in assignments.get(index, []):
+            chars.extend(
+                {
+                    **char,
+                    "script": script
+                    if str(char.get("text", "")).strip()
+                    else None,
+                }
+                for char in groups[source_index]["chars"]
+            )
+        merged.append({**group, "chars": chars})
+    return merged
+
+
 def _chars_to_lines(
     chars: Iterable[dict[str, Any]],
     page_width: float,
@@ -367,6 +495,7 @@ def _chars_to_lines(
         target["top"] = ((target["top"] * (count - 1)) + top) / count
         target["tolerance"] = max(target["tolerance"], tolerance)
 
+    groups = _attach_script_groups(groups)
     lines = [
         line
         for group in groups
@@ -476,9 +605,13 @@ def _heading_level(line: dict[str, Any], body_size: float, is_title: bool = Fals
 def _merge_runs(current: list[dict[str, Any]], incoming: list[dict[str, Any]], separator: str) -> None:
     if separator:
         if current and not current[-1]["text"].endswith((" ", "\n")):
-            current.append({"text": separator, "bold": False})
+            current.append({"text": separator, "bold": False, "script": None})
     for run in incoming:
-        if current and current[-1]["bold"] == run["bold"]:
+        if (
+            current
+            and current[-1].get("bold") == run.get("bold")
+            and current[-1].get("script") == run.get("script")
+        ):
             current[-1]["text"] += run["text"]
         else:
             current.append(dict(run))
@@ -921,6 +1054,44 @@ def _opendoc_model_base(model_dir: str | Path | None) -> Path:
     return base_dir
 
 
+def _ensure_utf8_console_output() -> None:
+    """Prevent OpenDoc's Unicode progress messages from failing on Windows GBK."""
+
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        encoding = str(getattr(stream, "encoding", "") or "").lower()
+        if reconfigure is not None and encoding not in {"utf-8", "utf8"}:
+            reconfigure(encoding="utf-8", errors="replace")
+
+
+def _prepare_opendoc_gpu_runtime(use_gpu: str) -> None:
+    """Preload Torch's CUDA DLLs before ONNX Runtime creates GPU sessions."""
+
+    if use_gpu == "false":
+        return
+    try:
+        import torch  # noqa: F401
+    except ImportError as exc:
+        if use_gpu == "true":
+            raise RuntimeError(
+                "GPU OpenDoc requires a CUDA-enabled torch installation so its "
+                "CUDA and cuDNN DLLs can be loaded on Windows."
+            ) from exc
+
+
+def _require_cuda_session(session: Any, component: str, use_gpu: str) -> None:
+    """Reject ONNX Runtime's otherwise silent CPU fallback for explicit GPU runs."""
+
+    if use_gpu != "true":
+        return
+    providers = list(session.get_providers())
+    if "CUDAExecutionProvider" not in providers:
+        raise RuntimeError(
+            f"{component} requested GPU but created providers {providers}. "
+            "Check onnxruntime-gpu and CUDA/cuDNN DLL availability."
+        )
+
+
 def _get_opendoc_layout_detector(
     model_dir: str | Path | None,
     use_gpu: str,
@@ -928,6 +1099,8 @@ def _get_opendoc_layout_detector(
 ) -> Any:
     """Load and cache PP-DocLayoutV2 without loading UniRec."""
 
+    _ensure_utf8_console_output()
+    _prepare_opendoc_gpu_runtime(use_gpu)
     try:
         from openocr.tools.infer_doc_onnx import LayoutDetectorONNX
     except ImportError as exc:
@@ -945,6 +1118,7 @@ def _get_opendoc_layout_detector(
             threshold=0.5,
             auto_download=auto_download,
         )
+        _require_cuda_session(detector.session, "OpenDoc layout", use_gpu)
         _LAYOUT_DETECTOR_CACHE[cache_key] = detector
     return detector
 
@@ -957,6 +1131,8 @@ def _get_selective_opendoc_recognizer(
 ) -> Any:
     """Load and cache UniRec without creating a second layout detector."""
 
+    _ensure_utf8_console_output()
+    _prepare_opendoc_gpu_runtime(use_gpu)
     try:
         from openocr.tools.infer_doc_onnx import OpenDocONNX
     except ImportError as exc:
@@ -979,24 +1155,139 @@ def _get_selective_opendoc_recognizer(
             auto_download=auto_download,
             max_parallel_blocks=workers,
         )
+        _require_cuda_session(
+            recognizer.vlm_recognizer.encoder_session,
+            "UniRec encoder",
+            use_gpu,
+        )
+        _require_cuda_session(
+            recognizer.vlm_recognizer.decoder_session,
+            "UniRec decoder",
+            use_gpu,
+        )
         _SELECTIVE_RECOGNIZER_CACHE[cache_key] = recognizer
     return recognizer
 
 
-def _render_fitz_page(page: Any) -> Any:
-    """Render a page exactly as the installed OpenDoc PDF adapter does."""
+def _render_pdfium_page(page: Any) -> Any:
+    """Render one PDFium page as the BGR image expected by OpenDoc."""
 
     import cv2
     import numpy as np
-    from PIL import Image
 
-    import fitz
+    width, height = page.get_size()
+    scale = 2.0
+    if width * scale > 2000 or height * scale > 2000:
+        scale = 1.0
+    bitmap = page.render(scale=scale)
+    try:
+        image = bitmap.to_pil().convert("RGB")
+        return cv2.cvtColor(np.asarray(image), cv2.COLOR_RGB2BGR)
+    finally:
+        bitmap.close()
 
-    pixmap = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
-    if pixmap.width > 2000 or pixmap.height > 2000:
-        pixmap = page.get_pixmap(matrix=fitz.Matrix(1, 1), alpha=False)
-    image = Image.frombytes("RGB", [pixmap.width, pixmap.height], pixmap.samples)
-    return cv2.cvtColor(np.asarray(image), cv2.COLOR_RGB2BGR)
+
+def _pdfium_font_name(text_page: Any, index: int) -> str:
+    import pypdfium2.raw as pdfium_c
+
+    flags = ctypes.c_int()
+    size = pdfium_c.FPDFText_GetFontInfo(
+        text_page,
+        index,
+        None,
+        0,
+        ctypes.byref(flags),
+    )
+    if size <= 1:
+        return ""
+    buffer = ctypes.create_string_buffer(size)
+    pdfium_c.FPDFText_GetFontInfo(
+        text_page,
+        index,
+        buffer,
+        size,
+        ctypes.byref(flags),
+    )
+    return buffer.value.decode("utf-8", errors="replace")
+
+
+def _pdfium_page_chars(
+    page: Any,
+    *,
+    include_rotated: bool = False,
+) -> list[dict[str, Any]]:
+    """Extract only native text geometry, without parsing vector drawings."""
+
+    import pypdfium2.raw as pdfium_c
+
+    page_height = float(page.get_height())
+    text_page = page.get_textpage()
+    chars: list[dict[str, Any]] = []
+    try:
+        for index in range(text_page.count_chars()):
+            codepoint = int(pdfium_c.FPDFText_GetUnicode(text_page, index))
+            if not codepoint:
+                continue
+            try:
+                text = chr(codepoint)
+            except ValueError:
+                continue
+            if text in {"\r", "\n", "\f", "\v"}:
+                continue
+            if text.isspace():
+                text = " "
+            elif not text.isprintable():
+                continue
+            try:
+                left, bottom, right, top = text_page.get_charbox(index)
+                (
+                    loose_left,
+                    loose_bottom,
+                    loose_right,
+                    loose_top,
+                ) = text_page.get_charbox(
+                    index,
+                    loose=True,
+                )
+            except Exception:
+                continue
+            font_name = _pdfium_font_name(text_page, index)
+            font_weight = int(pdfium_c.FPDFText_GetFontWeight(text_page, index))
+            if font_weight >= 600 and not _is_bold(font_name):
+                font_name = f"{font_name}-Bold"
+            angle = float(pdfium_c.FPDFText_GetCharAngle(text_page, index))
+            signed_angle = (angle + math.pi) % (2 * math.pi) - math.pi
+            normalized_angle = abs(signed_angle)
+            raw_font_size = float(
+                pdfium_c.FPDFText_GetFontSize(text_page, index)
+            )
+            chars.append(
+                {
+                    "text": text,
+                    "x0": float(min(loose_left, loose_right)),
+                    "x1": float(max(loose_left, loose_right)),
+                    "top": page_height - float(max(loose_bottom, loose_top)),
+                    "bottom": page_height
+                    - float(min(loose_bottom, loose_top)),
+                    "size": max(
+                        raw_font_size,
+                        abs(float(loose_top) - float(loose_bottom)),
+                    ),
+                    "fontname": font_name,
+                    "upright": min(normalized_angle, abs(math.pi - normalized_angle))
+                    < 0.10,
+                    "angle": signed_angle,
+                }
+            )
+    finally:
+        text_page.close()
+    if include_rotated:
+        return [
+            char
+            for char in chars
+            if str(char.get("text", "")).replace("\x00", "")
+        ]
+    return _layout_source_chars(chars)
 
 
 def _run_opendoc_layout(detector: Any, image: Any) -> dict[str, Any]:
@@ -1072,6 +1363,23 @@ def _visible_character_count(chars: Iterable[dict[str, Any]]) -> int:
         sum(not character.isspace() for character in str(char.get("text", "")))
         for char in chars
     )
+
+
+def _layout_source_chars(chars: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Keep explicit PDF whitespace for layout-region text reconstruction."""
+
+    usable: list[dict[str, Any]] = []
+    for char in chars:
+        if not char.get("upright", True):
+            continue
+        raw_text = str(char.get("text", ""))
+        text = raw_text.replace("\x00", "")
+        if not text:
+            continue
+        if text != raw_text:
+            char = {**char, "text": text}
+        usable.append(char)
+    return usable
 
 
 def _merge_layout_lines(lines: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -1254,6 +1562,20 @@ def _layout_native_needs_recognition(label: str, blocks: list[Block]) -> bool:
     return "(cid:" in text or chemical_dash_as_e is not None
 
 
+def _layout_region_needs_recognition(
+    label: str,
+    native_fallback: list[Block],
+) -> bool:
+    """Route every table and formula through UniRec, regardless of native text."""
+
+    return (
+        label == "table"
+        or label in _LAYOUT_FORMULA_LABELS
+        or not native_fallback
+        or _layout_native_needs_recognition(label, native_fallback)
+    )
+
+
 def _native_table_is_plausible(
     table: Block,
     *,
@@ -1315,6 +1637,300 @@ def _crop_layout_region(image: Any, bbox: BBox, label: str) -> Any | None:
     return cropped
 
 
+def _table_crop_rotation(chars: Sequence[dict[str, Any]]) -> int:
+    """Return the quarter-turn needed to make predominantly rotated text upright."""
+
+    visible = [
+        char
+        for char in chars
+        if str(char.get("text", "")).strip()
+    ]
+    rotated = [char for char in visible if not char.get("upright", True)]
+    if len(rotated) < 10 or len(rotated) / max(len(visible), 1) < 0.60:
+        return 0
+    angle = median(float(char.get("angle", 0.0)) for char in rotated)
+    if abs(abs(angle) - math.pi / 2) > 0.20:
+        return 0
+    # PDFium reports the long2009 page-7 table as -90 degrees. Rotating its
+    # raster crop clockwise restores the reading direction.
+    return 90 if angle < 0 else -90
+
+
+def _rotate_crop(image: Any, rotation: int) -> Any:
+    if not rotation:
+        return image
+    import cv2
+
+    code = (
+        cv2.ROTATE_90_CLOCKWISE
+        if rotation == 90
+        else cv2.ROTATE_90_COUNTERCLOCKWISE
+    )
+    return cv2.rotate(image, code)
+
+
+def _looks_like_colored_chart(
+    image: Any,
+    *,
+    native_character_count: int,
+) -> bool:
+    """Detect heatmaps that PP-DocLayoutV2 occasionally labels as tables."""
+
+    if native_character_count < 100:
+        return False
+    import cv2
+    import numpy as np
+
+    if image is None or not getattr(image, "size", 0):
+        return False
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    saturation = hsv[:, :, 1]
+    value = hsv[:, :, 2]
+    colored_ratio = float(
+        np.mean((saturation >= 20) & (value <= 253))
+    )
+    saturation_upper_quartile = float(np.percentile(saturation, 75))
+    return colored_ratio >= 0.05 and saturation_upper_quartile >= 20
+
+
+def _native_dense_table_fallback(
+    chars: Sequence[dict[str, Any]],
+    *,
+    bbox: BBox,
+    confidence: float,
+) -> Block | None:
+    """Recover oversized native tables that exceed UniRec's token capacity."""
+
+    upright_chars = _layout_source_chars(chars)
+    if _visible_character_count(upright_chars) < 1800:
+        return None
+    cell_lines = _chars_to_lines(
+        upright_chars,
+        max(bbox[2] - bbox[0], 1.0),
+    )
+    grouped_rows: list[dict[str, Any]] = []
+    for line in sorted(
+        cell_lines,
+        key=lambda item: (item["bbox"][1], item["bbox"][0]),
+    ):
+        center = (line["bbox"][1] + line["bbox"][3]) / 2
+        target = next(
+            (
+                row
+                for row in reversed(grouped_rows[-4:])
+                if abs(center - row["center"]) <= 3.5
+            ),
+            None,
+        )
+        if target is None:
+            target = {"center": center, "lines": []}
+            grouped_rows.append(target)
+        target["lines"].append(line)
+        target["center"] = sum(
+            (item["bbox"][1] + item["bbox"][3]) / 2
+            for item in target["lines"]
+        ) / len(target["lines"])
+
+    runs: list[list[dict[str, Any]]] = []
+    current: list[dict[str, Any]] = []
+    for row in grouped_rows:
+        if len(row["lines"]) >= 3:
+            current.append(row)
+        else:
+            if current:
+                runs.append(current)
+                current = []
+    if current:
+        runs.append(current)
+    grid_rows = max(runs, key=len, default=[])
+    if len(grid_rows) < 30:
+        return None
+
+    column_count = Counter(
+        len(row["lines"]) for row in grid_rows
+    ).most_common(1)[0][0]
+    if column_count < 3:
+        return None
+    anchor_rows = [
+        sorted(row["lines"], key=lambda item: item["bbox"][0])
+        for row in grid_rows
+        if len(row["lines"]) == column_count
+    ]
+    if len(anchor_rows) < max(5, len(grid_rows) // 2):
+        return None
+    anchors = [
+        median(row[index]["bbox"][0] for row in anchor_rows)
+        for index in range(column_count)
+    ]
+    rows: list[list[str]] = []
+    for row in grid_rows:
+        cells = [""] * column_count
+        for line in sorted(row["lines"], key=lambda item: item["bbox"][0]):
+            index = min(
+                range(column_count),
+                key=lambda candidate: abs(
+                    line["bbox"][0] - anchors[candidate]
+                ),
+            )
+            cells[index] = re.sub(
+                r"([×x]10)([+-]?\d+)$",
+                r"\1^\2",
+                _clean_text(
+                    f"{cells[index]} {line['text']}"
+                ),
+            )
+        rows.append(cells)
+    if not rows:
+        return None
+    grid_bbox = (
+        min(line["bbox"][0] for row in grid_rows for line in row["lines"]),
+        min(line["bbox"][1] for row in grid_rows for line in row["lines"]),
+        max(line["bbox"][2] for row in grid_rows for line in row["lines"]),
+        max(line["bbox"][3] for row in grid_rows for line in row["lines"]),
+    )
+    return Block(
+        kind="table",
+        bbox=grid_bbox,
+        rows=[
+            [f"Column {index + 1}" for index in range(column_count)],
+            *rows,
+        ],
+        confidence=confidence,
+        complex_table=True,
+        source="layout-native-capacity",
+        label="table",
+    )
+
+
+def _unirec_task_max_length(
+    label: str,
+    native_character_count: int,
+    configured_max_length: int,
+) -> int:
+    """Use native content as a conservative upper bound for autoregressive OCR."""
+
+    configured = max(32, int(configured_max_length))
+    if label in _LAYOUT_FORMULA_LABELS:
+        return min(configured, 512)
+    if label == "table" and native_character_count >= 20:
+        estimated = 384 + round(native_character_count * 1.5)
+        return min(configured, max(512, estimated))
+    return configured
+
+
+def _token_tail_is_repetitive(token_ids: Sequence[int]) -> bool:
+    """Stop exact token cycles that otherwise run until the hard token limit."""
+
+    if len(token_ids) < 256:
+        return False
+    tail = token_ids[-192:]
+    if tail and Counter(tail).most_common(1)[0][1] / len(tail) >= 0.90:
+        return True
+    for unit_length, repeats in ((8, 12), (16, 8), (32, 6)):
+        span = unit_length * repeats
+        if len(token_ids) < span:
+            continue
+        unit = list(token_ids[-unit_length:])
+        if len(set(unit)) > 1 and list(token_ids[-span:]) == unit * repeats:
+            return True
+    return False
+
+
+def _generate_unirec_text(
+    vlm_recognizer: Any,
+    image: Any,
+    *,
+    max_length: int,
+) -> tuple[str, int, str]:
+    """Run UniRec generation with EOS, repetition, and length stop reporting."""
+
+    import cv2
+    import numpy as np
+    from PIL import Image
+    from openocr.tools.infer_unirec_onnx import clean_special_tokens
+
+    rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    pil_image = Image.fromarray(rgb)
+    encoder_hidden_states, cross_k, cross_v = vlm_recognizer.encode_image(
+        pil_image
+    )
+    tokenizer = vlm_recognizer.tokenizer
+    generated_ids = [tokenizer.bos_token_id]
+    batch_size = encoder_hidden_states.shape[0]
+    past_key_values = [
+        (
+            np.zeros(
+                (
+                    batch_size,
+                    vlm_recognizer.num_heads,
+                    0,
+                    vlm_recognizer.head_dim,
+                ),
+                dtype=np.float32,
+            ),
+            np.zeros(
+                (
+                    batch_size,
+                    vlm_recognizer.num_heads,
+                    0,
+                    vlm_recognizer.head_dim,
+                ),
+                dtype=np.float32,
+            ),
+        )
+        for _ in range(vlm_recognizer.num_decoder_layers)
+    ]
+    stop_reason = "max_length"
+    for step in range(max_length - 1):
+        logits, past_key_values = vlm_recognizer.decode_step(
+            generated_ids[-1],
+            step,
+            cross_k,
+            cross_v,
+            past_key_values,
+            padding_idx=tokenizer.pad_token_id,
+        )
+        next_token_id = int(np.argmax(logits[0, -1, :]))
+        generated_ids.append(next_token_id)
+        if next_token_id == tokenizer.eos_token_id:
+            stop_reason = "eos"
+            break
+        if _token_tail_is_repetitive(generated_ids):
+            stop_reason = "repetition"
+            break
+    decoded = tokenizer.decode(generated_ids, skip_special_tokens=False)
+    return clean_special_tokens(decoded), len(generated_ids), stop_reason
+
+
+def _postprocess_unirec_text(raw_label: str, text: str) -> str:
+    from openocr.tools import infer_doc_onnx
+
+    if "table" in raw_label:
+        return infer_doc_onnx.markdown_converter._handle_table(text)
+    if "formula" in raw_label and raw_label != "formula_number":
+        return infer_doc_onnx.markdown_converter._handle_formula(text)
+    return infer_doc_onnx.markdown_converter._handle_text(text)
+
+
+def _table_recognition_is_suspicious(
+    text: str,
+    *,
+    native_character_count: int,
+) -> bool:
+    """Reject structurally explosive table output when native text is available."""
+
+    if native_character_count < 80 or not text:
+        return False
+    row_count = len(re.findall(r"<tr(?:\s|>)", text, flags=re.IGNORECASE))
+    cell_count = len(re.findall(r"<td(?:\s|>)", text, flags=re.IGNORECASE))
+    excessive_text = len(text) > native_character_count * 12 + 1500
+    excessive_structure = (
+        row_count > max(120, native_character_count // 3)
+        or cell_count > max(500, native_character_count)
+    )
+    return excessive_text and excessive_structure
+
+
 def _recognize_layout_tasks(
     tasks: list[dict[str, Any]],
     *,
@@ -1323,7 +1939,7 @@ def _recognize_layout_tasks(
     auto_download: bool,
     max_length: int,
     max_parallel_blocks: int,
-) -> list[str]:
+) -> list[dict[str, Any]]:
     if not tasks:
         return []
     recognizer = _get_selective_opendoc_recognizer(
@@ -1332,18 +1948,78 @@ def _recognize_layout_tasks(
         auto_download,
         max_parallel_blocks,
     )
-    texts = recognizer._parallel_vlm_recognize(
-        [task["image"] for task in tasks],
-        [task["raw_label"] for task in tasks],
-        max_length,
-    )
+    results: list[dict[str, Any] | None] = [None] * len(tasks)
+
+    def recognize(index: int, task: dict[str, Any]) -> tuple[int, dict[str, Any]]:
+        task_max_length = _unirec_task_max_length(
+            task["label"],
+            int(task.get("native_character_count", 0)),
+            max_length,
+        )
+        started = time.perf_counter()
+        status = "ok"
+        error = ""
+        text = ""
+        token_count = 0
+        stop_reason = "error"
+        try:
+            raw_text, token_count, stop_reason = _generate_unirec_text(
+                recognizer.vlm_recognizer,
+                task["image"],
+                max_length=task_max_length,
+            )
+            text = _postprocess_unirec_text(task["raw_label"], raw_text)
+            if task["label"] == "table" and _table_recognition_is_suspicious(
+                text,
+                native_character_count=int(
+                    task.get("native_character_count", 0)
+                ),
+            ):
+                status = "rejected_suspicious"
+                text = ""
+        except Exception as exc:
+            status = "error"
+            error = f"{type(exc).__name__}: {exc}"
+        return index, {
+            "text": text,
+            "seconds": round(time.perf_counter() - started, 6),
+            "token_count": token_count,
+            "max_length": task_max_length,
+            "stop_reason": stop_reason,
+            "status": status,
+            "error": error,
+        }
+
+    workers = min(max(1, max_parallel_blocks), len(tasks))
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        futures = {
+            executor.submit(recognize, index, task): index
+            for index, task in enumerate(tasks)
+        }
+        for future in as_completed(futures):
+            index = futures[future]
+            try:
+                result_index, result = future.result()
+                results[result_index] = result
+            except Exception as exc:
+                results[index] = {
+                    "text": "",
+                    "seconds": 0.0,
+                    "token_count": 0,
+                    "max_length": max_length,
+                    "stop_reason": "error",
+                    "status": "error",
+                    "error": f"{type(exc).__name__}: {exc}",
+                }
+
     try:
         from openocr.tools.infer_doc_onnx import convert_otsl_to_html
     except ImportError:
         convert_otsl_to_html = None
-    normalized: list[str] = []
-    for task, text in zip(tasks, texts):
-        value = (text or "").strip()
+    normalized: list[dict[str, Any]] = []
+    for task, result in zip(tasks, results):
+        normalized_result = dict(result or {})
+        value = str(normalized_result.get("text") or "").strip()
         if (
             task["label"] == "table"
             and value
@@ -1353,35 +2029,31 @@ def _recognize_layout_tasks(
             html_value = convert_otsl_to_html(value)
             if html_value:
                 value = html_value
-        normalized.append(value)
+        normalized_result["text"] = value
+        normalized.append(normalized_result)
     return normalized
 
 
 def _parse_pdf_hybrid(
     pdf_path: str | Path,
     *,
-    native_document: Document,
     password: str | None = None,
     model_dir: str | Path | None = None,
     use_gpu: str = "auto",
     auto_download: bool = True,
     max_length: int = 2048,
-    max_parallel_blocks: int = 2,
+    max_parallel_blocks: int = 4,
     max_pages: int | None = None,
 ) -> Document:
-    """Use OpenDoc layout for every page and fill regions from native text first."""
+    """Run document-wide layout first, then fill regions with native text/UniRec."""
 
-    import fitz
+    import pypdfium2
 
     source = Path(pdf_path)
+    if not source.is_file():
+        raise FileNotFoundError(source)
     detector = _get_opendoc_layout_detector(model_dir, use_gpu, auto_download)
-    body_size = float(native_document.metadata.get("body_font_size", 10.0) or 10.0)
-    warnings = [
-        warning
-        for warning in native_document.warnings
-        if "OCR is required" not in warning
-        and "used pypdf text fallback" not in warning
-    ]
+    warnings: list[str] = []
     pages: list[Page] = []
     layout_timings: list[float] = []
     render_timings: list[float] = []
@@ -1391,35 +2063,34 @@ def _parse_pdf_hybrid(
     mapped_native_chars = 0
     total_layout_regions = 0
     total_ocr_regions = 0
+    total_table_regions = 0
+    recognition_diagnostics: list[dict[str, Any]] = []
+    pending_pages: list[dict[str, Any]] = []
 
-    with fitz.open(str(source)) as fitz_pdf, pdfplumber.open(
-        str(source), password=password
-    ) as plumber_pdf:
-        if fitz_pdf.needs_pass and not fitz_pdf.authenticate(password or ""):
-            raise ValueError(f"Unable to decrypt PDF: {source}")
-        page_limit = min(
-            len(native_document.pages),
-            len(plumber_pdf.pages),
-            fitz_pdf.page_count,
-        )
-        if max_pages is not None:
-            page_limit = min(page_limit, max_pages)
+    pdfium_document = pypdfium2.PdfDocument(str(source), password=password)
+    page_limit = len(pdfium_document)
+    if max_pages is not None:
+        page_limit = min(page_limit, max_pages)
 
+    layout_pages: list[dict[str, Any]] = []
+    try:
+        # Pass 1: finish layout for every page before native text extraction starts.
         for page_index in range(page_limit):
-            plumber_page = plumber_pdf.pages[page_index]
-            native_page = native_document.pages[page_index]
-
-            started = time.perf_counter()
-            page_image = _render_fitz_page(fitz_pdf[page_index])
-            render_timings.append(time.perf_counter() - started)
+            pdfium_page = pdfium_document[page_index]
+            try:
+                page_width = float(pdfium_page.get_width())
+                page_height = float(pdfium_page.get_height())
+                started = time.perf_counter()
+                page_image = _render_pdfium_page(pdfium_page)
+                render_timings.append(time.perf_counter() - started)
+            finally:
+                pdfium_page.close()
 
             started = time.perf_counter()
             layout_result = _run_opendoc_layout(detector, page_image)
             layout_timings.append(time.perf_counter() - started)
 
             image_height, image_width = page_image.shape[:2]
-            page_width = float(plumber_page.width)
-            page_height = float(plumber_page.height)
             regions: list[dict[str, Any]] = []
             for order, box in enumerate(layout_result.get("boxes", [])):
                 raw_label = str(box.get("label", "text"))
@@ -1442,74 +2113,86 @@ def _parse_pdf_hybrid(
                     }
                 )
             total_layout_regions += len(regions)
+            total_table_regions += sum(
+                region["label"] == "table" for region in regions
+            )
+            layout_pages.append(
+                {
+                    "number": page_index + 1,
+                    "width": page_width,
+                    "height": page_height,
+                    "image": page_image,
+                    "regions": regions,
+                }
+            )
 
-            layout_table_regions = [
+        # Pass 2: PDFium's text API ignores vector drawings and returns char geometry.
+        native_font_sizes: list[float] = []
+        for page_index, layout_page in enumerate(layout_pages):
+            pdfium_page = pdfium_document[page_index]
+            try:
+                all_chars = _pdfium_page_chars(
+                    pdfium_page,
+                    include_rotated=True,
+                )
+            finally:
+                pdfium_page.close()
+            chars = _layout_source_chars(all_chars)
+            layout_page["chars"] = chars
+            layout_page["all_chars"] = all_chars
+            native_font_sizes.extend(
+                float(char.get("size", 0.0))
+                for char in chars
+                if float(char.get("size", 0.0)) > 0
+                and not str(char.get("text", "")).isspace()
+            )
+    finally:
+        pdfium_document.close()
+
+    body_size = median(native_font_sizes) if native_font_sizes else 10.0
+    repeated = _find_repeated_margins(
+        [
+            (
+                page["height"],
+                _chars_to_lines(page["chars"], page["width"]),
+            )
+            for page in layout_pages
+        ]
+    )
+
+    if layout_pages:
+        page_limit = min(page_limit, len(layout_pages))
+        if max_pages is not None:
+            page_limit = min(page_limit, max_pages)
+
+        for page_index in range(page_limit):
+            layout_page = layout_pages[page_index]
+            page_image = layout_page["image"]
+            page_width = layout_page["width"]
+            page_height = layout_page["height"]
+            regions = layout_page["regions"]
+
+            table_regions = [
                 region for region in regions if region["label"] == "table"
             ]
-            chart_regions = [
-                region
-                for region in regions
-                if region["label"] in {"chart", "image"}
-            ]
-            native_tables = [
-                block for block in native_page.blocks if block.kind == "table"
-            ]
-            accepted_tables: list[Block] = []
-            for table in native_tables:
-                table_overlap = max(
-                    (
-                        _bbox_intersection_ratio(table.bbox, region["bbox"])
-                        for region in layout_table_regions
-                    ),
-                    default=0.0,
-                )
-                chart_overlap = max(
-                    (
-                        _bbox_intersection_ratio(table.bbox, region["bbox"])
-                        for region in chart_regions
-                    ),
-                    default=0.0,
-                )
-                if table_overlap >= 0.20 or _native_table_is_plausible(
-                    table,
-                    page_width=page_width,
-                    page_height=page_height,
-                    chart_overlap=chart_overlap,
-                ):
-                    accepted_tables.append(table)
-
-            table_for_region: dict[int, Block] = {}
-            used_table_ids: set[int] = set()
-            for region in layout_table_regions:
-                matches = [
-                    (
-                        _bbox_intersection_ratio(table.bbox, region["bbox"]),
-                        table,
-                    )
-                    for table in accepted_tables
-                    if id(table) not in used_table_ids
-                ]
-                overlap, table = max(matches, default=(0.0, None), key=lambda item: item[0])
-                if table is not None and overlap >= 0.20:
-                    table_for_region[region["order"]] = table
-                    used_table_ids.add(id(table))
-
-            chars = [
-                char
-                for char in plumber_page.chars
-                if char.get("upright", True)
-                and str(char.get("text", "")).replace("\x00", "").strip()
-            ]
+            chars = layout_page["chars"]
+            all_chars = layout_page["all_chars"]
             total_native_chars += _visible_character_count(chars)
             assignments: list[list[dict[str, Any]]] = [[] for _ in regions]
             unassigned_chars: list[dict[str, Any]] = []
             for char in chars:
-                if any(_inside_bbox(char, table.bbox) for table in accepted_tables):
+                # Tables are wholly owned by UniRec; do not leak their native text
+                # into layout-native or unmatched-text fallback blocks.
+                if any(
+                    _inside_bbox(char, region["bbox"], padding=1.0)
+                    for region in table_regions
+                ):
                     continue
                 candidate_indices = [
                     index
                     for index, region in enumerate(regions)
-                    if _inside_bbox(char, region["bbox"], padding=1.0)
+                    if region["label"] != "table"
+                    and _inside_bbox(char, region["bbox"], padding=1.0)
                 ]
                 if not candidate_indices:
                     unassigned_chars.append(char)
@@ -1529,46 +2212,142 @@ def _parse_pdf_hybrid(
             for region_index, region in enumerate(regions):
                 label = region["label"]
                 region_chars = assignments[region_index]
+                region_all_chars = [
+                    char
+                    for char in all_chars
+                    if _inside_bbox(char, region["bbox"], padding=1.0)
+                ]
                 if label in _LAYOUT_IGNORED_LABELS:
                     continue
-                if label == "table":
-                    native_table = table_for_region.get(region["order"])
-                    if native_table is not None:
-                        entries.append(
-                            (
-                                float(region["order"]),
-                                replace(
-                                    native_table,
-                                    source="layout-native",
-                                    label="table",
-                                    confidence=min(
-                                        native_table.confidence,
-                                        region["score"],
-                                    ),
-                                ),
-                            )
-                        )
-                        source_counts["layout-native"] += 1
-                        continue
-                native_fallback = _native_blocks_for_layout_region(
-                    label="text" if label in _LAYOUT_FORMULA_LABELS else label,
-                    bbox=region["bbox"],
-                    chars=region_chars,
-                    page_width=page_width,
-                    body_size=body_size,
-                    confidence=region["score"],
+                native_fallback = (
+                    []
+                    if label == "table"
+                    else _native_blocks_for_layout_region(
+                        label="text" if label in _LAYOUT_FORMULA_LABELS else label,
+                        bbox=region["bbox"],
+                        chars=region_chars,
+                        page_width=page_width,
+                        body_size=body_size,
+                        confidence=region["score"],
+                    )
                 )
-                needs_recognition = (
-                    label == "table"
-                    or label in _LAYOUT_FORMULA_LABELS
-                    or not native_fallback
-                    or _layout_native_needs_recognition(label, native_fallback)
+                needs_recognition = _layout_region_needs_recognition(
+                    label,
+                    native_fallback,
                 )
                 if needs_recognition:
                     cropped = _crop_layout_region(
                         page_image, region["image_bbox"], label
                     )
                     if cropped is not None:
+                        native_character_count = _visible_character_count(
+                            region_all_chars
+                        )
+                        rotation = (
+                            _table_crop_rotation(region_all_chars)
+                            if label == "table"
+                            else 0
+                        )
+                        native_capacity_fallback = (
+                            _native_dense_table_fallback(
+                                [
+                                    char
+                                    for char in all_chars
+                                    if _inside_bbox(
+                                        char,
+                                        region["bbox"],
+                                        padding=45.0,
+                                    )
+                                ],
+                                bbox=region["bbox"],
+                                confidence=region["score"],
+                            )
+                            if label == "table" and not rotation
+                            else None
+                        )
+                        if native_capacity_fallback is not None:
+                            entries.append(
+                                (
+                                    float(region["order"]),
+                                    native_capacity_fallback,
+                                )
+                            )
+                            source_counts[
+                                native_capacity_fallback.source
+                            ] += 1
+                            recognition_diagnostics.append(
+                                {
+                                    "page": page_index + 1,
+                                    "label": label,
+                                    "bbox": list(
+                                        native_capacity_fallback.bbox
+                                    ),
+                                    "crop_width": int(cropped.shape[1]),
+                                    "crop_height": int(cropped.shape[0]),
+                                    "native_character_count": (
+                                        native_character_count
+                                    ),
+                                    "rotation": 0,
+                                    "seconds": 0.0,
+                                    "token_count": 0,
+                                    "max_length": 0,
+                                    "stop_reason": (
+                                        "native_capacity_fallback"
+                                    ),
+                                    "status": "native_capacity_fallback",
+                                    "output_characters": sum(
+                                        len(cell)
+                                        for row in native_capacity_fallback.rows
+                                        for cell in row
+                                    ),
+                                    "rows": len(
+                                        native_capacity_fallback.rows
+                                    ),
+                                    "columns": max(
+                                        (
+                                            len(row)
+                                            for row
+                                            in native_capacity_fallback.rows
+                                        ),
+                                        default=0,
+                                    ),
+                                }
+                            )
+                            warnings.append(
+                                f"page {page_index + 1}: oversized table "
+                                "used native grid fallback to avoid UniRec "
+                                "token overflow"
+                            )
+                            continue
+                        if label == "table" and _looks_like_colored_chart(
+                            cropped,
+                            native_character_count=native_character_count,
+                        ):
+                            recognition_diagnostics.append(
+                                {
+                                    "page": page_index + 1,
+                                    "label": label,
+                                    "bbox": list(region["bbox"]),
+                                    "crop_width": int(cropped.shape[1]),
+                                    "crop_height": int(cropped.shape[0]),
+                                    "native_character_count": (
+                                        native_character_count
+                                    ),
+                                    "rotation": 0,
+                                    "seconds": 0.0,
+                                    "token_count": 0,
+                                    "max_length": 0,
+                                    "stop_reason": "skipped_chart",
+                                    "status": "skipped_chart",
+                                    "output_characters": 0,
+                                }
+                            )
+                            warnings.append(
+                                f"page {page_index + 1}: table-like region "
+                                "skipped as probable chart or heatmap"
+                            )
+                            continue
+                        cropped = _rotate_crop(cropped, rotation)
                         recognition_tasks.append(
                             {
                                 "order": float(region["order"]),
@@ -1576,8 +2355,15 @@ def _parse_pdf_hybrid(
                                 "raw_label": region["raw_label"],
                                 "bbox": region["bbox"],
                                 "score": region["score"],
-                                "image": cropped,
+                                "image": cropped.copy(),
                                 "fallback": native_fallback,
+                                "page_number": page_index + 1,
+                                "native_character_count": (
+                                    native_character_count
+                                ),
+                                "rotation": rotation,
+                                "crop_width": int(cropped.shape[1]),
+                                "crop_height": int(cropped.shape[0]),
                             }
                         )
                         continue
@@ -1586,23 +2372,8 @@ def _parse_pdf_hybrid(
                     source_counts[block.source] += 1
                 mapped_native_chars += _visible_character_count(region_chars)
 
-            unmatched_tables = [
-                table for table in accepted_tables if id(table) not in used_table_ids
-            ]
-            for table in unmatched_tables:
-                entries.append(
-                    (
-                        _region_insertion_order(regions, table.bbox),
-                        replace(table, source="native-table", label="table"),
-                    )
-                )
-                source_counts["native-table"] += 1
-
             if unassigned_chars:
                 fallback_lines = _chars_to_lines(unassigned_chars, page_width)
-                repeated = set(
-                    native_document.metadata.get("removed_repeated_margins", [])
-                )
                 fallback_lines = [
                     line
                     for line in fallback_lines
@@ -1617,61 +2388,144 @@ def _parse_pdf_hybrid(
                     )
                     source_counts["native-fallback"] += 1
 
-            if recognition_tasks:
-                started = time.perf_counter()
-                try:
-                    recognized_texts = _recognize_layout_tasks(
-                        recognition_tasks,
-                        model_dir=model_dir,
-                        use_gpu=use_gpu,
-                        auto_download=auto_download,
-                        max_length=max_length,
-                        max_parallel_blocks=max_parallel_blocks,
-                    )
-                except Exception as exc:
-                    warnings.append(
-                        f"page {page_index + 1}: selective UniRec failed: "
-                        f"{type(exc).__name__}: {exc}"
-                    )
-                    recognized_texts = [""] * len(recognition_tasks)
-                recognition_seconds += time.perf_counter() - started
-                for task, recognized_text in zip(recognition_tasks, recognized_texts):
-                    recognized_blocks = _recognized_blocks_for_layout_region(
-                        label=task["label"],
-                        bbox=task["bbox"],
-                        text=recognized_text,
-                        confidence=task["score"],
-                    )
-                    selected_blocks = recognized_blocks or task["fallback"]
-                    for offset, block in enumerate(selected_blocks):
-                        entries.append((task["order"] + offset / 100, block))
-                        source_counts[block.source] += 1
-                    if recognized_blocks:
-                        total_ocr_regions += 1
-                    else:
-                        mapped_native_chars += sum(
-                            len(block.text) for block in task["fallback"]
-                        )
-
-            ordered_blocks: list[Block] = []
-            for _, block in sorted(entries, key=lambda item: item[0]):
-                if (
-                    block.kind == "heading"
-                    and ordered_blocks
-                    and ordered_blocks[-1].kind == "heading"
-                    and _clean_text(ordered_blocks[-1].text).casefold()
-                    == _clean_text(block.text).casefold()
-                ):
-                    continue
-                ordered_blocks.append(block)
-            pages.append(
-                Page(
-                    number=page_index + 1,
-                    width=page_width,
-                    height=page_height,
-                    blocks=ordered_blocks,
-                )
+            pending_pages.append(
+                {
+                    "number": page_index + 1,
+                    "width": page_width,
+                    "height": page_height,
+                    "entries": entries,
+                    "recognition_tasks": recognition_tasks,
+                }
             )
+            layout_page["image"] = None
+
+    all_recognition_tasks = [
+        task
+        for pending_page in pending_pages
+        for task in pending_page["recognition_tasks"]
+    ]
+    recognition_results: list[dict[str, Any]] = []
+    if all_recognition_tasks:
+        started = time.perf_counter()
+        try:
+            recognition_results = _recognize_layout_tasks(
+                all_recognition_tasks,
+                model_dir=model_dir,
+                use_gpu=use_gpu,
+                auto_download=auto_download,
+                max_length=max_length,
+                max_parallel_blocks=max_parallel_blocks,
+            )
+        except Exception as exc:
+            for page_number in sorted(
+                {task["page_number"] for task in all_recognition_tasks}
+            ):
+                warnings.append(
+                    f"page {page_number}: selective UniRec failed: "
+                    f"{type(exc).__name__}: {exc}"
+                )
+            recognition_results = [
+                {
+                    "text": "",
+                    "seconds": 0.0,
+                    "token_count": 0,
+                    "max_length": max_length,
+                    "stop_reason": "error",
+                    "status": "error",
+                    "error": f"{type(exc).__name__}: {exc}",
+                }
+                for _ in all_recognition_tasks
+            ]
+        recognition_seconds += time.perf_counter() - started
+
+    recognition_offset = 0
+    for pending_page in pending_pages:
+        entries = pending_page["entries"]
+        page_tasks = pending_page["recognition_tasks"]
+        page_results = recognition_results[
+            recognition_offset : recognition_offset + len(page_tasks)
+        ]
+        recognition_offset += len(page_tasks)
+        for task, recognition_result in zip(page_tasks, page_results):
+            recognized_text = str(recognition_result.get("text") or "")
+            diagnostic = {
+                "page": task["page_number"],
+                "label": task["label"],
+                "bbox": list(task["bbox"]),
+                "crop_width": task["crop_width"],
+                "crop_height": task["crop_height"],
+                "native_character_count": task["native_character_count"],
+                "rotation": task["rotation"],
+                "segment_index": task.get("segment_index", 1),
+                "segment_count": task.get("segment_count", 1),
+                "seconds": recognition_result.get("seconds", 0.0),
+                "token_count": recognition_result.get("token_count", 0),
+                "max_length": recognition_result.get("max_length", max_length),
+                "stop_reason": recognition_result.get(
+                    "stop_reason",
+                    "unknown",
+                ),
+                "status": recognition_result.get("status", "unknown"),
+                "output_characters": len(recognized_text),
+            }
+            if recognition_result.get("error"):
+                diagnostic["error"] = recognition_result["error"]
+            recognition_diagnostics.append(diagnostic)
+            if diagnostic["status"] == "error":
+                warnings.append(
+                    f"page {task['page_number']}: UniRec {task['label']} "
+                    f"failed: {diagnostic.get('error', 'unknown error')}"
+                )
+            elif diagnostic["status"] == "rejected_suspicious":
+                warnings.append(
+                    f"page {task['page_number']}: suspicious UniRec table "
+                    "output was rejected"
+                )
+            elif diagnostic["stop_reason"] == "max_length":
+                warnings.append(
+                    f"page {task['page_number']}: UniRec {task['label']} "
+                    f"reached token limit {diagnostic['max_length']}"
+                )
+            recognized_blocks = _recognized_blocks_for_layout_region(
+                label=task["label"],
+                bbox=task["bbox"],
+                text=recognized_text,
+                confidence=task["score"],
+            )
+            selected_blocks = recognized_blocks or task["fallback"]
+            for offset, block in enumerate(selected_blocks):
+                entries.append((task["order"] + offset / 100, block))
+                source_counts[block.source] += 1
+            if recognized_blocks:
+                total_ocr_regions += 1
+            else:
+                if task["label"] == "table":
+                    warnings.append(
+                        f"page {task['page_number']}: UniRec returned no table content"
+                    )
+                mapped_native_chars += sum(
+                    len(block.text) for block in task["fallback"]
+                )
+
+        ordered_blocks: list[Block] = []
+        for _, block in sorted(entries, key=lambda item: item[0]):
+            if (
+                block.kind == "heading"
+                and ordered_blocks
+                and ordered_blocks[-1].kind == "heading"
+                and _clean_text(ordered_blocks[-1].text).casefold()
+                == _clean_text(block.text).casefold()
+            ):
+                continue
+            ordered_blocks.append(block)
+        pages.append(
+            Page(
+                number=pending_page["number"],
+                width=pending_page["width"],
+                height=pending_page["height"],
+                blocks=ordered_blocks,
+            )
+        )
 
     output_characters = sum(
         len(block.text) + sum(len(cell) for row in block.rows for cell in row)
@@ -1681,18 +2535,42 @@ def _parse_pdf_hybrid(
     status = "ok" if output_characters >= max(50, len(pages) * 10) else "ocr_required"
     if status == "ocr_required":
         warnings.append("Hybrid parsing produced little usable text; OCR is still required.")
-    metadata = dict(native_document.metadata)
+    metadata: dict[str, Any] = {}
+    try:
+        reader = PdfReader(str(source))
+        if reader.is_encrypted and not reader.decrypt(password or ""):
+            raise ValueError(f"Unable to decrypt PDF metadata: {source}")
+        metadata.update(_reader_metadata(reader))
+    except Exception as exc:
+        warnings.append(
+            f"PDF metadata could not be read: {type(exc).__name__}: {exc}"
+        )
     metadata.update(
         {
             "backend": "hybrid",
             "page_count": len(pages),
+            "renderer": "pypdfium2",
+            "native_text_provider": "pypdfium2",
+            "table_provider": "unirec",
+            "body_font_size": round(body_size, 2),
+            "removed_repeated_margins": sorted(repeated),
             "layout_provider": list(detector.session.get_providers()),
             "layout_seconds": round(sum(layout_timings), 6),
             "layout_page_seconds": [round(value, 6) for value in layout_timings],
             "render_seconds": round(sum(render_timings), 6),
             "selective_unirec_seconds": round(recognition_seconds, 6),
             "layout_regions": total_layout_regions,
+            "layout_table_regions": total_table_regions,
             "selective_unirec_regions": total_ocr_regions,
+            "unirec_region_diagnostics": recognition_diagnostics,
+            "unirec_stop_reasons": dict(
+                sorted(
+                    Counter(
+                        item["stop_reason"]
+                        for item in recognition_diagnostics
+                    ).items()
+                )
+            ),
             "native_character_coverage": round(
                 mapped_native_chars / max(total_native_chars, 1), 4
             ),
@@ -1823,13 +2701,18 @@ def _document_from_opendoc_results(
 def _parse_pdf_opendoc(
     pdf_path: str | Path,
     *,
+    password: str | None = None,
     model_dir: str | Path | None = None,
     use_gpu: str = "auto",
     auto_download: bool = True,
     max_length: int = 2048,
-    max_parallel_blocks: int = 2,
+    max_parallel_blocks: int = 4,
     max_pages: int | None = None,
 ) -> Document:
+    import pypdfium2
+
+    _ensure_utf8_console_output()
+    _prepare_opendoc_gpu_runtime(use_gpu)
     source = Path(pdf_path)
     if not source.is_file():
         raise FileNotFoundError(source)
@@ -1855,34 +2738,27 @@ def _parse_pdf_opendoc(
         auto_download=auto_download,
         max_parallel_blocks=max(1, max_parallel_blocks),
     )
-    temporary_directory: tempfile.TemporaryDirectory[str] | None = None
-    input_path = source
+    pdfium_document = pypdfium2.PdfDocument(str(source), password=password)
+    page_limit = len(pdfium_document)
+    if max_pages is not None:
+        page_limit = min(page_limit, max_pages)
+    results: list[dict[str, Any]] = []
     try:
-        if source.suffix.lower() == ".pdf" and max_pages is not None:
-            import fitz
-
-            source_pdf = fitz.open(str(source))
-            if source_pdf.page_count > max_pages:
-                temporary_directory = tempfile.TemporaryDirectory(prefix="opendoc_pdf_")
-                limited_path = Path(temporary_directory.name) / source.name
-                limited_pdf = fitz.open()
-                limited_pdf.insert_pdf(
-                    source_pdf,
-                    from_page=0,
-                    to_page=max(0, max_pages - 1),
-                )
-                limited_pdf.save(str(limited_path))
-                limited_pdf.close()
-                input_path = limited_path
-            source_pdf.close()
-        results = parser(
-            image_path=str(input_path),
-            max_length=max_length,
-            merge_layout_blocks=True,
-        )
+        for page_index in range(page_limit):
+            pdfium_page = pdfium_document[page_index]
+            try:
+                image = _render_pdfium_page(pdfium_page)
+            finally:
+                pdfium_page.close()
+            result = parser(
+                img_numpy=image,
+                max_length=max_length,
+                merge_layout_blocks=True,
+            )
+            result["pdf_page"] = page_index + 1
+            results.append(result)
     finally:
-        if temporary_directory is not None:
-            temporary_directory.cleanup()
+        pdfium_document.close()
     return _document_from_opendoc_results(source, results)
 
 
@@ -1897,13 +2773,14 @@ def parse_pdf(
     opendoc_use_gpu: str = "auto",
     opendoc_auto_download: bool = True,
     opendoc_max_length: int = 2048,
-    opendoc_max_parallel_blocks: int = 2,
+    opendoc_max_parallel_blocks: int = 4,
 ) -> Document:
     """Parse with native, full OpenDoc, or layout-first hybrid extraction."""
 
     if backend not in {"native", "auto", "hybrid", "opendoc"}:
         raise ValueError("backend must be one of: native, auto, hybrid, opendoc")
     opendoc_options = {
+        "password": password,
         "model_dir": opendoc_model_dir,
         "use_gpu": opendoc_use_gpu,
         "auto_download": opendoc_auto_download,
@@ -1914,30 +2791,28 @@ def parse_pdf(
     if backend == "opendoc":
         return _parse_pdf_opendoc(pdf_path, **opendoc_options)
 
-    native_document = _parse_pdf_native(
-        pdf_path,
-        password=password,
-        table_strategy=table_strategy,
-        max_pages=max_pages,
-    )
-    native_document.metadata.setdefault("backend", "native")
     if backend == "native":
+        native_document = _parse_pdf_native(
+            pdf_path,
+            password=password,
+            table_strategy=table_strategy,
+            max_pages=max_pages,
+        )
+        native_document.metadata.setdefault("backend", "native")
         return native_document
 
     try:
-        return _parse_pdf_hybrid(
-            pdf_path,
-            native_document=native_document,
-            password=password,
-            **opendoc_options,
-        )
+        return _parse_pdf_hybrid(pdf_path, **opendoc_options)
     except Exception as exc:
-        native_document.warnings.append(
-            f"OpenDoc layout-first hybrid failed; native fallback was used: "
+        if backend == "hybrid":
+            raise
+        fallback = _parse_pdf_opendoc(pdf_path, **opendoc_options)
+        fallback.warnings.append(
+            f"Hybrid parsing failed; full OpenDoc fallback was used: "
             f"{type(exc).__name__}: {exc}"
         )
-        native_document.metadata["backend"] = "native-fallback"
-        return native_document
+        fallback.metadata["backend"] = "opendoc-fallback"
+        return fallback
 
 
 def convert_pdf(
@@ -1953,7 +2828,7 @@ def convert_pdf(
     opendoc_use_gpu: str = "auto",
     opendoc_auto_download: bool = True,
     opendoc_max_length: int = 2048,
-    opendoc_max_parallel_blocks: int = 2,
+    opendoc_max_parallel_blocks: int = 4,
 ) -> tuple[str, Document]:
     """Parse one PDF, render Markdown, and optionally write output artifacts."""
 
@@ -2000,7 +2875,7 @@ def _cli() -> int:
         "--backend",
         choices=("auto", "hybrid", "native", "opendoc"),
         default="auto",
-        help="auto/hybrid use OpenDoc layout, native text, and selective UniRec",
+        help="auto/hybrid use layout-first OpenDoc, PDFium text, and UniRec tables",
     )
     parser.add_argument(
         "--opendoc-model-dir",
@@ -2014,7 +2889,7 @@ def _cli() -> int:
     )
     parser.add_argument("--opendoc-no-auto-download", action="store_true")
     parser.add_argument("--opendoc-max-length", type=int, default=2048)
-    parser.add_argument("--opendoc-max-parallel-blocks", type=int, default=2)
+    parser.add_argument("--opendoc-max-parallel-blocks", type=int, default=4)
     args = parser.parse_args()
 
     inputs = sorted(args.input.glob("*.pdf")) if args.input.is_dir() else [args.input]

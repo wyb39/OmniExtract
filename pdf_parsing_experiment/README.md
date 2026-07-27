@@ -6,14 +6,20 @@ See [PLAN.md](PLAN.md) for the detailed implementation plan, output contract, ar
 
 ## Intended pipeline
 
-1. Accept a PDF input and collect document metadata.
-2. Run OpenDoc PP-DocLayoutV2 on every page for region labels and reading order.
-3. Map `pdfplumber` characters, fonts, and bold styles into those regions.
-4. Invoke UniRec only for tables, formulas, scanned pages, and low-coverage regions.
-5. Fuse OpenDoc and native table candidates.
+1. Render every PDF page with `pypdfium2`.
+2. Finish OpenDoc PP-DocLayoutV2 for the whole document before native extraction.
+3. Read native character geometry, fonts, and bold styles with PDFium and map
+   them into the detected regions.
+4. Send detected tables to UniRec. If a machine-generated table has a stable
+   native grid that would exceed UniRec's token capacity, recover that grid
+   with PDFium characters instead of invoking `pdfplumber`.
+5. Invoke UniRec for formulas, scanned pages, and low-coverage regions.
 6. Normalize the result into a lightweight `Document -> Page -> Block` model.
 7. Add fixtures and comparison checks for representative PDFs.
 8. Move the validated implementation into the appropriate `src` module.
+
+The hybrid and full OpenDoc PDF paths do not use PyMuPDF. `pdfplumber` remains
+available only in the explicit `native` comparison backend.
 
 ## Development boundary
 
@@ -81,8 +87,9 @@ under `models/opendoc/` and ignored by Git:
 - `unirec_decoder.onnx`
 - `unirec_tokenizer_mapping.json`
 
-The models total approximately 943 MB. The current installed ONNX Runtime exposes
-the CPU provider; `--opendoc-use-gpu false` forces that tested path.
+The models total approximately 943 MB. The installed ONNX Runtime exposes CUDA
+and CPU providers. `--opendoc-use-gpu true` requires CUDA for Layout and UniRec;
+`--opendoc-use-gpu false` forces CPU.
 
 Regression checks:
 
@@ -99,24 +106,29 @@ ignored by Git.
 
 ## Current limits
 
-- `auto` and `hybrid` run OpenDoc Layout for every page, but do not OCR ordinary
-  machine-generated body text. Critical headings with visibly corrupt native
-  font mapping are eligible for local OCR.
+- `auto` and `hybrid` complete OpenDoc Layout for every page before extracting
+  native text. Ordinary machine-generated body text is not OCRed. Tables and
+  formulas use UniRec unless an oversized native table is recovered by the
+  token-capacity fallback.
+- Color-dense heatmaps mislabeled as tables are skipped as charts, and
+  predominantly rotated table crops are normalized before UniRec.
+- Debug JSON records per-region UniRec time, generated token count, configured
+  limit, stop reason, rotation, and fallback status.
 - Full OpenDoc OCR remains much slower than Layout plus native character mapping.
 - Vector chart labels can still enter the text stream because PDF figures do not
   always expose a reliable image boundary.
 - Cross-page table merging is not implemented yet.
-- Borderless table detection is heuristic and deliberately rejects paragraph-like
-  candidates to avoid turning prose into false tables.
 
 ## Migration checklist
 
 - [x] Define the lightweight intermediate document model in `pdf_to_markdown.py`.
-- [x] Implement `pypdf` fallback and `pdfplumber` layout/table extraction together.
+- [x] Keep `pdfplumber` as an explicit native-only comparison backend.
 - [x] Implement Markdown and table rendering in `markdown_renderer.py`.
 - [x] Add full OpenDoc parsing and OCR fallback.
 - [x] Make OpenDoc Layout the unified `auto` entry and map native characters by region.
-- [x] Add selective UniRec for tables, formulas, and low-coverage regions.
+- [x] Remove PyMuPDF from the PDF flow and use PDFium for rendering/native text.
+- [x] Route detected tables through UniRec with an oversized native-grid
+  capacity fallback.
 - [ ] Compare results against the current parser.
 - [x] Add regression tests and corpus evaluation.
 - [ ] Move the validated components into `src` and update callers.

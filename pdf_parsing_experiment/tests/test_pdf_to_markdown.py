@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 EXPERIMENT_DIR = Path(__file__).resolve().parents[1]
@@ -20,10 +21,19 @@ from pdf_to_markdown import (
     _is_bold,
     _layout_bbox_to_pdf,
     _layout_native_needs_recognition,
+    _layout_region_needs_recognition,
+    _layout_source_chars,
+    _looks_like_colored_chart,
+    _native_dense_table_fallback,
     _native_blocks_for_layout_region,
     _native_table_is_plausible,
     _normalize_layout_heading,
+    parse_pdf,
     _run_opendoc_layout,
+    _table_crop_rotation,
+    _table_recognition_is_suspicious,
+    _token_tail_is_repetitive,
+    _unirec_task_max_length,
 )
 
 
@@ -62,6 +72,34 @@ class RendererTests(unittest.TestCase):
         self.assertIn("**Important** result", markdown)
         self.assertIn("| A | B |", markdown)
         self.assertIn("| --- | --- |", markdown)
+
+    def test_adjacent_bold_runs_keep_their_separator(self) -> None:
+        document = Document(
+            source="synthetic.pdf",
+            metadata={},
+            pages=[
+                Page(
+                    number=1,
+                    width=600,
+                    height=800,
+                    blocks=[
+                        Block(
+                            kind="heading",
+                            bbox=(0, 0, 100, 20),
+                            text="tumor behavior",
+                            runs=[
+                                {"text": "tumor", "bold": True},
+                                {"text": " ", "bold": False},
+                                {"text": "behavior", "bold": True},
+                            ],
+                            level=1,
+                        )
+                    ],
+                )
+            ],
+        )
+
+        self.assertEqual(render_document(document), "# **tumor behavior**\n")
 
     def test_complex_table_uses_html(self) -> None:
         document = Document(
@@ -194,7 +232,93 @@ class RendererTests(unittest.TestCase):
         self.assertEqual(blocks[0].kind, "heading")
         self.assertEqual(blocks[0].level, 1)
         self.assertEqual(blocks[0].source, "layout-native")
+        self.assertEqual(blocks[0].text, "Hybrid Title")
         self.assertGreater(blocks[0].bold_ratio, 0.9)
+
+    def test_layout_source_chars_preserve_explicit_whitespace(self) -> None:
+        chars = [
+            {"text": "A", "upright": True},
+            {"text": " ", "upright": True},
+            {"text": "\x00", "upright": True},
+            {"text": "B\x00", "upright": True},
+            {"text": "ignored", "upright": False},
+        ]
+
+        usable = _layout_source_chars(chars)
+
+        self.assertEqual([char["text"] for char in usable], ["A", " ", "B"])
+
+    def test_shifted_small_glyphs_render_as_inline_scripts(self) -> None:
+        def char(
+            text: str,
+            x0: float,
+            x1: float,
+            top: float,
+            bottom: float,
+            size: float,
+        ) -> dict[str, object]:
+            return {
+                "text": text,
+                "x0": x0,
+                "x1": x1,
+                "top": top,
+                "bottom": bottom,
+                "size": size,
+                "fontname": "Times",
+                "upright": True,
+            }
+
+        title_chars = [
+            char("Z", 10, 18, 10, 24, 14),
+            char("r", 18, 23, 10, 24, 14),
+            char("5", 23, 29, 15, 25.5, 10.5),
+            char("5", 29, 35, 15, 25.5, 10.5),
+            char("C", 35, 44, 10, 24, 14),
+            char("u", 44, 52, 10, 24, 14),
+            char("3", 52, 58, 15, 25.5, 10.5),
+            char("0", 58, 64, 15, 25.5, 10.5),
+        ]
+        author_chars = []
+        x = 10.0
+        for value in "B. Chen":
+            width = 3.0 if value == " " else 5.0
+            author_chars.append(char(value, x, x + width, 40, 51, 11))
+            x += width
+        author_chars.extend(
+            [
+                char("a", x + 3, x + 7, 37, 45, 8),
+                char(",", x + 7, x + 9, 37, 45, 8),
+                char("b", x + 9, x + 13, 37, 45, 8),
+            ]
+        )
+
+        title = _native_blocks_for_layout_region(
+            label="doc_title",
+            bbox=(8, 8, 70, 28),
+            chars=title_chars,
+            page_width=600,
+            body_size=11,
+            confidence=0.99,
+        )[0]
+        author = _native_blocks_for_layout_region(
+            label="text",
+            bbox=(8, 35, 70, 55),
+            chars=author_chars,
+            page_width=600,
+            body_size=11,
+            confidence=0.99,
+        )[0]
+        document = Document(
+            source="scripts.pdf",
+            metadata={},
+            pages=[Page(number=1, width=600, height=800, blocks=[title, author])],
+        )
+
+        self.assertEqual(title.text, "Zr55Cu30")
+        self.assertEqual(author.text, "B. Chena,b")
+        markdown = render_document(document)
+        self.assertIn("# Zr<sub>55</sub>Cu<sub>30</sub>", markdown)
+        self.assertIn("B. Chen<sup>a,b</sup>", markdown)
 
     def test_layout_heading_and_native_table_filters(self) -> None:
         self.assertEqual(_normalize_layout_heading("a b s t r a c t"), "Abstract")
@@ -247,6 +371,121 @@ class RendererTests(unittest.TestCase):
         self.assertFalse(
             _layout_native_needs_recognition("text", [corrupt_title])
         )
+
+    def test_hybrid_runs_without_native_prepass(self) -> None:
+        expected = Document(source="synthetic.pdf", metadata={}, pages=[])
+        with patch(
+            "pdf_to_markdown._parse_pdf_hybrid",
+            return_value=expected,
+        ) as hybrid_parser, patch(
+            "pdf_to_markdown._parse_pdf_native"
+        ) as native_parser:
+            actual = parse_pdf("synthetic.pdf", backend="hybrid")
+
+        self.assertIs(actual, expected)
+        hybrid_parser.assert_called_once()
+        native_parser.assert_not_called()
+
+    def test_all_layout_tables_are_routed_to_unirec(self) -> None:
+        native_block = Block(
+            kind="paragraph",
+            bbox=(0, 0, 100, 20),
+            text="native table-like text",
+        )
+
+        self.assertTrue(
+            _layout_region_needs_recognition("table", [native_block])
+        )
+        self.assertFalse(
+            _layout_region_needs_recognition("text", [native_block])
+        )
+
+    def test_unirec_generation_guards(self) -> None:
+        self.assertEqual(_unirec_task_max_length("display_formula", 400, 2048), 512)
+        self.assertEqual(_unirec_task_max_length("table", 100, 2048), 534)
+        self.assertEqual(_unirec_task_max_length("table", 0, 2048), 2048)
+        self.assertEqual(_unirec_task_max_length("text", 100, 2048), 2048)
+
+        prefix = list(range(200))
+        repetitive_tail = [4, 8, 15, 16, 23, 42, 7, 9] * 12
+        self.assertTrue(_token_tail_is_repetitive(prefix + repetitive_tail))
+        self.assertFalse(_token_tail_is_repetitive(list(range(300))))
+
+        explosive_table = "<table>" + "".join(
+            "<tr>" + "<td>value</td>" * 5 + "</tr>"
+            for _ in range(130)
+        ) + "</table>"
+        self.assertTrue(
+            _table_recognition_is_suspicious(
+                explosive_table,
+                native_character_count=100,
+            )
+        )
+        self.assertFalse(
+            _table_recognition_is_suspicious(
+                "<table><tr><td>A</td><td>B</td></tr></table>",
+                native_character_count=100,
+            )
+        )
+
+    def test_table_crop_rotation_and_heatmap_filter(self) -> None:
+        import math
+        import numpy as np
+
+        rotated_chars = [
+            {"text": "A", "upright": False, "angle": -math.pi / 2}
+            for _ in range(20)
+        ]
+        self.assertEqual(_table_crop_rotation(rotated_chars), 90)
+        self.assertEqual(
+            _table_crop_rotation(
+                [{"text": "A", "upright": True, "angle": 0.0}] * 20
+            ),
+            0,
+        )
+
+        heatmap = np.full((100, 100, 3), 255, dtype=np.uint8)
+        heatmap[15:85, 15:85] = (180, 210, 250)
+        self.assertTrue(
+            _looks_like_colored_chart(
+                heatmap,
+                native_character_count=200,
+            )
+        )
+        plain_table = np.full((100, 100, 3), 255, dtype=np.uint8)
+        plain_table[::20, :] = 0
+        plain_table[:, ::20] = 0
+        self.assertFalse(
+            _looks_like_colored_chart(
+                plain_table,
+                native_character_count=200,
+            )
+        )
+
+        dense_chars = []
+        for row in range(50):
+            for column in range(4):
+                for offset in range(10):
+                    dense_chars.append(
+                        {
+                            "text": "A",
+                            "x0": 10 + column * 100 + offset * 3,
+                            "x1": 12 + column * 100 + offset * 3,
+                            "top": 10 + row * 10,
+                            "bottom": 16 + row * 10,
+                            "size": 6,
+                            "upright": True,
+                        }
+                    )
+        fallback = _native_dense_table_fallback(
+            dense_chars,
+            bbox=(0, 0, 500, 600),
+            confidence=0.9,
+        )
+        self.assertIsNotNone(fallback)
+        self.assertEqual(len(fallback.rows), 51)
+        self.assertEqual(len(fallback.rows[0]), 4)
+        self.assertEqual(fallback.rows[0][0], "Column 1")
 
     def test_layout_adapter_repairs_799_pixel_tensor(self) -> None:
         import numpy as np
