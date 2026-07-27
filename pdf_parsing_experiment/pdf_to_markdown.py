@@ -218,9 +218,39 @@ def _extract_tables(page: Any, strategy: str = "auto") -> list[Block]:
 
 
 def _line_from_chars(chars: list[dict[str, Any]]) -> dict[str, Any] | None:
-    ordered = sorted(chars, key=lambda char: (float(char.get("x0", 0.0)), float(char.get("top", 0.0))))
+    has_source_order = any(char.get("source_index") is not None for char in chars)
+
+    def order_key(char: dict[str, Any]) -> tuple[float, float, float]:
+        source_index = char.get("source_index")
+        return (
+            float(char.get("x0", 0.0)),
+            float(source_index)
+            if source_index is not None
+            else float("inf"),
+            float(char.get("top", 0.0)),
+        )
+
+    ordered = sorted(chars, key=order_key)
     if not ordered:
         return None
+
+    visible_ordered = [
+        char
+        for char in ordered
+        if str(char.get("text", "")).strip()
+    ]
+    observed_space_gaps: list[float] = []
+    for previous, current in zip(visible_ordered, visible_ordered[1:]):
+        if not current.get("source_space_before"):
+            continue
+        gap = float(current.get("x0", 0.0)) - float(
+            previous.get("x1", previous.get("x0", 0.0))
+        )
+        if gap > 0.5:
+            observed_space_gaps.append(gap)
+    observed_space_gap = (
+        median(observed_space_gaps) if observed_space_gaps else None
+    )
 
     parts: list[str] = []
     runs: list[dict[str, Any]] = []
@@ -260,6 +290,11 @@ def _line_from_chars(chars: list[dict[str, Any]]) -> dict[str, Any] | None:
         value = str(char.get("text", ""))
         if not value:
             continue
+        if has_source_order and value.isspace():
+            # PDFium spaces may have a tiny, baseline-shifted box and land in a
+            # separate visual group. Reconstruct them from source_space_before
+            # on the following visible character instead.
+            continue
         x0 = float(char.get("x0", 0.0))
         x1 = float(char.get("x1", x0))
         size = float(char.get("size", previous_size) or previous_size)
@@ -269,7 +304,23 @@ def _line_from_chars(chars: list[dict[str, Any]]) -> dict[str, Any] | None:
             trim_space_before_script()
         if previous_x1 is not None and not value.isspace() and script is None:
             gap = x0 - previous_x1
-            if gap > max(1.2, min(previous_size, size) * 0.22) and (not parts or not parts[-1].endswith(" ")):
+            explicit_space = bool(char.get("source_space_before"))
+            geometry_threshold = max(
+                1.2,
+                min(previous_size, size) * 0.22,
+            )
+            if observed_space_gap is not None:
+                # Some PDFs omit selected spaces from their Unicode stream,
+                # even though the visual gap is identical to nearby confirmed
+                # spaces. Calibrate per line instead of relying only on size.
+                geometry_threshold = min(
+                    geometry_threshold,
+                    max(0.6, observed_space_gap * 0.8),
+                )
+            if (
+                explicit_space
+                or gap >= geometry_threshold
+            ) and (not parts or not parts[-1].endswith(" ")):
                 append_piece(" ", False, None)
         append_piece(value, bold, script)
         nonspace = sum(not character.isspace() for character in value)
@@ -293,6 +344,20 @@ def _line_from_chars(chars: list[dict[str, Any]]) -> dict[str, Any] | None:
                 }
             )
     sizes = [float(char.get("size", 0.0) or 0.0) for char in ordered if str(char.get("text", "")).strip()]
+    source_indices = [
+        int(char["source_index"])
+        for char in ordered
+        if str(char.get("text", "")).strip()
+        and char.get("source_index") is not None
+    ]
+    first_visible = next(
+        (
+            char
+            for char in ordered
+            if str(char.get("text", "")).strip()
+        ),
+        None,
+    )
     return {
         "text": text,
         "runs": cleaned_runs,
@@ -305,6 +370,14 @@ def _line_from_chars(chars: list[dict[str, Any]]) -> dict[str, Any] | None:
         "font_size": median(sizes) if sizes else 0.0,
         "bold_ratio": bold_chars / max(visible_chars, 1),
         "column": 0,
+        "source_start": min(source_indices) if source_indices else None,
+        "source_end": max(source_indices) if source_indices else None,
+        "source_space_before": bool(
+            first_visible and first_visible.get("source_space_before")
+        ),
+        "source_hyphen_before": bool(
+            first_visible and first_visible.get("source_hyphen_before")
+        ),
     }
 
 
@@ -617,6 +690,34 @@ def _merge_runs(current: list[dict[str, Any]], incoming: list[dict[str, Any]], s
             current.append(dict(run))
 
 
+def _source_lines_continue_word(
+    previous: dict[str, Any],
+    current: dict[str, Any],
+) -> bool:
+    """Detect a PDFium word split across visual lines without a text-space."""
+
+    previous_end = previous.get("source_end")
+    current_start = current.get("source_start")
+    if previous_end is None or current_start is None:
+        return False
+    return (
+        int(current_start) == int(previous_end) + 1
+        and not current.get("source_space_before")
+        and str(previous.get("text", ""))[-1:].isalnum()
+        and str(current.get("text", ""))[:1].islower()
+    )
+
+
+def _preserve_wrapped_hyphen(previous_text: str) -> bool:
+    """Keep scientific prefixes and chained compounds at visual line wraps."""
+
+    match = re.search(r"([A-Za-z0-9]+(?:-[A-Za-z0-9]+)*)-?$", previous_text)
+    if not match:
+        return False
+    token = match.group(1)
+    return len(token.rsplit("-", 1)[-1]) <= 2 or "-" in token
+
+
 def _build_blocks(
     ordered: list[Any], body_size: float, title_line: dict[str, Any] | None
 ) -> list[Block]:
@@ -630,15 +731,37 @@ def _build_blocks(
         runs: list[dict[str, Any]] = []
         for index, line in enumerate(paragraph_lines):
             line_text = line["text"]
-            dehyphenate = bool(index and text.endswith("-") and line_text[:1].islower())
-            if dehyphenate:
-                text = text[:-1]
-                if runs:
-                    runs[-1]["text"] = runs[-1]["text"].rstrip("-")
+            wrapped_hyphen = bool(
+                index
+                and text.endswith("-")
+                and line_text[:1].islower()
+            )
+            source_hyphen = bool(
+                index
+                and line.get("source_hyphen_before")
+                and line_text[:1].islower()
+            )
+            source_continuation = bool(
+                index
+                and _source_lines_continue_word(
+                    paragraph_lines[index - 1],
+                    line,
+                )
+            )
+            separator = ""
+            if wrapped_hyphen:
+                if not _preserve_wrapped_hyphen(text):
+                    text = text[:-1]
+                    if runs:
+                        runs[-1]["text"] = runs[-1]["text"].rstrip("-")
+            elif source_hyphen:
+                if _preserve_wrapped_hyphen(text):
+                    separator = "-"
+            elif source_continuation:
                 separator = ""
             else:
                 separator = " " if index else ""
-                text += separator
+            text += separator
             text += line_text
             _merge_runs(runs, line["runs"], separator)
         bbox = (
@@ -1248,10 +1371,17 @@ def _pdfium_page_chars(
         page_bbox = (0.0, 0.0, float(page.get_width()), float(page.get_height()))
     text_page = page.get_textpage()
     chars: list[dict[str, Any]] = []
+    pending_source_space = False
+    pending_source_hyphen = False
     try:
         for index in range(text_page.count_chars()):
             codepoint = int(pdfium_c.FPDFText_GetUnicode(text_page, index))
             if not codepoint:
+                continue
+            if codepoint == 2:
+                # Some Elsevier PDFs expose a visible line-end hyphen as STX
+                # while keeping it out of the Unicode text stream.
+                pending_source_hyphen = True
                 continue
             try:
                 text = chr(codepoint)
@@ -1259,7 +1389,8 @@ def _pdfium_page_chars(
                 continue
             if text in {"\r", "\n", "\f", "\v"}:
                 continue
-            if text.isspace():
+            is_space = text.isspace()
+            if is_space:
                 text = " "
             elif not text.isprintable():
                 continue
@@ -1275,6 +1406,9 @@ def _pdfium_page_chars(
                     loose=True,
                 )
             except Exception:
+                pending_source_space = is_space
+                if not is_space:
+                    pending_source_hyphen = False
                 continue
             font_name = _pdfium_font_name(text_page, index)
             font_weight = int(pdfium_c.FPDFText_GetFontWeight(text_page, index))
@@ -1310,8 +1444,18 @@ def _pdfium_page_chars(
                     "upright": min(normalized_angle, abs(math.pi - normalized_angle))
                     < 0.10,
                     "angle": signed_angle,
+                    "source_index": index,
+                    "source_space_before": (
+                        pending_source_space and not is_space
+                    ),
+                    "source_hyphen_before": (
+                        pending_source_hyphen and not is_space
+                    ),
                 }
             )
+            pending_source_space = is_space
+            if not is_space:
+                pending_source_hyphen = False
     finally:
         text_page.close()
     if include_rotated:
@@ -1424,15 +1568,37 @@ def _merge_layout_lines(lines: list[dict[str, Any]]) -> dict[str, Any] | None:
     runs: list[dict[str, Any]] = []
     for index, line in enumerate(lines):
         line_text = line["text"]
-        dehyphenate = bool(index and text.endswith("-") and line_text[:1].islower())
-        if dehyphenate:
-            text = text[:-1]
-            if runs:
-                runs[-1]["text"] = runs[-1]["text"].rstrip("-")
+        wrapped_hyphen = bool(
+            index
+            and text.endswith("-")
+            and line_text[:1].islower()
+        )
+        source_hyphen = bool(
+            index
+            and line.get("source_hyphen_before")
+            and line_text[:1].islower()
+        )
+        source_continuation = bool(
+            index
+            and _source_lines_continue_word(
+                lines[index - 1],
+                line,
+            )
+        )
+        separator = ""
+        if wrapped_hyphen:
+            if not _preserve_wrapped_hyphen(text):
+                text = text[:-1]
+                if runs:
+                    runs[-1]["text"] = runs[-1]["text"].rstrip("-")
+        elif source_hyphen:
+            if _preserve_wrapped_hyphen(text):
+                separator = "-"
+        elif source_continuation:
             separator = ""
         else:
             separator = " " if index else ""
-            text += separator
+        text += separator
         text += line_text
         _merge_runs(runs, line["runs"], separator)
     total_chars = sum(max(len(line["text"]), 1) for line in lines)

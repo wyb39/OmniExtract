@@ -258,6 +258,97 @@ class RendererTests(unittest.TestCase):
 
         self.assertEqual([char["text"] for char in usable], ["A", " ", "B"])
 
+    def test_pdfium_source_spacing_repairs_shifted_spaces_and_wrapped_words(
+        self,
+    ) -> None:
+        chars: list[dict[str, object]] = []
+        source_index = 0
+        pending_space = False
+
+        for line_text, top, hidden_hyphen_before in (
+            ("high energy syn", 10.0, False),
+            ("chrotron diffraction and ", 20.0, True),
+            ("thermal properties of Zr", 30.0, False),
+            ("based plastic manner micro", 40.0, True),
+            ("structure ", 50.0, False),
+            ("laser-treated", 60.0, False),
+            ("spot line", 70.0, True),
+        ):
+            pending_hyphen = hidden_hyphen_before
+            if pending_hyphen:
+                # PDFium reports some visible line-end hyphens as U+0002.
+                source_index += 1
+            x = 10.0
+            for value in line_text:
+                if value == " ":
+                    x += 1.55
+                    chars.append(
+                        {
+                            "text": " ",
+                            "x0": x,
+                            "x1": x,
+                            "top": top + 4.8,
+                            "bottom": top + 5.8,
+                            "size": 1.0,
+                            "fontname": "Times",
+                            "upright": True,
+                            "source_index": source_index,
+                            "source_space_before": False,
+                            "source_hyphen_before": False,
+                        }
+                    )
+                    pending_space = True
+                else:
+                    chars.append(
+                        {
+                            "text": value,
+                            "x0": x,
+                            "x1": x + 4.0,
+                            "top": top,
+                            "bottom": top + 7.0,
+                            "size": 8.0,
+                            "fontname": "Times",
+                            "upright": True,
+                            "source_index": source_index,
+                            "source_space_before": pending_space,
+                            "source_hyphen_before": pending_hyphen,
+                        }
+                    )
+                    x += 4.0
+                    pending_space = False
+                    pending_hyphen = False
+                source_index += 1
+
+        # Simulate a PDF Unicode stream that omits one real space while its
+        # visual gap remains identical to confirmed spaces on the same line.
+        visible_prefix = ""
+        for char in chars:
+            if float(char["top"]) != 40.0 or not str(char["text"]).strip():
+                continue
+            if visible_prefix.endswith("plastic") and char["text"] == "m":
+                char["source_space_before"] = False
+                break
+            visible_prefix += str(char["text"])
+
+        blocks = _native_blocks_for_layout_region(
+            label="text",
+            bbox=(0.0, 0.0, 300.0, 90.0),
+            chars=chars,
+            page_width=300.0,
+            body_size=8.0,
+            confidence=0.99,
+        )
+
+        self.assertEqual(len(blocks), 1)
+        self.assertEqual(
+            blocks[0].text,
+            (
+                "high energy synchrotron diffraction and thermal properties "
+                "of Zr-based plastic manner microstructure "
+                "laser-treated-spot line"
+            ),
+        )
+
     def test_shifted_small_glyphs_render_as_inline_scripts(self) -> None:
         def char(
             text: str,
