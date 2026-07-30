@@ -40,16 +40,14 @@ def get_model_settings(model_usage):
 
 def modify_model(data):
     def save_current_model_settings(model_instance, data):
-        model_instance.model_name = data["model_name"]
-        model_instance.model_type = data["model_type"]
-        model_instance.api_key = data["api_key"]
-        model_instance.api_base = data["api_base"]
-        model_instance.model_usage = data["model_usage"]
-        model_instance.temperature = data["temperature"]
-        model_instance.max_tokens = data["max_tokens"]
-        model_instance.top_p = data["top_p"]
-        model_instance.top_k = data["top_k"]
-        model_instance.min_p = data["min_p"]
+        validated = ModelSettings.model_validate(data)
+        for field_name in validated.model_fields:
+            if field_name in data:
+                setattr(
+                    model_instance,
+                    field_name,
+                    getattr(validated, field_name),
+                )
         model_instance.setting_status = True
         message = model_instance.save_model_settings()
         return message

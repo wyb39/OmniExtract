@@ -92,26 +92,71 @@
         <div class="form-group">
             <label class="form-label">Temperature</label>
             <input type="number" id="temperature" class="form-input form-input-limited" min="0" max="2" step="0.1" value="0.0">
+            <div class="form-help">Controls randomness. Some thinking models require the provider default and may ignore this value.</div>
         </div>
         <div class="form-group">
             <label class="form-label">Max Tokens</label>
-            <input type="number" id="max-tokens" class="form-input form-input-limited" value="2500">
+            <input type="number" id="max-tokens" class="form-input form-input-limited" min="1" value="2500">
+            <div class="form-help">Maximum generated tokens. For reasoning models this limit can include thinking/reasoning tokens.</div>
         </div>
     </div>
     <div class="form-group">
         <label class="form-label">Top-p</label>
         <input type="number" id="top-p" class="form-input form-input-limited" min="0" max="1" step="0.01" placeholder="0.0-1.0 or leave empty">
-        <div class="form-help">Optional, for OpenAI compatible APIs</div>
+        <div class="form-help">Optional nucleus sampling value supported by the configured providers. Do not combine with temperature unless the model recommends it.</div>
     </div>
     <div class="form-group">
         <label class="form-label">Top-k</label>
         <input type="number" id="top-k" class="form-input form-input-limited" min="1" placeholder="Positive integer or leave empty">
-        <div class="form-help">Optional, for vllm, sglang, openrouter, etc.</div>
+        <div class="form-help">Optional. Supported for Anthropic, Gemini, Qwen, vLLM, Ollama, SGLang, OpenRouter and compatible custom endpoints; not sent to OpenAI or DeepSeek.</div>
     </div>
     <div class="form-group">
         <label class="form-label">Min-p</label>
         <input type="number" id="min-p" class="form-input form-input-limited" min="0" max="1" step="0.01" placeholder="0.0-1.0 or leave empty">
-        <div class="form-help">Optional, for vllm, sglang, openrouter, etc.</div>
+        <div class="form-help">Optional local/gateway sampling control. Supported for vLLM, Ollama, SGLang, OpenRouter and compatible custom endpoints.</div>
+    </div>
+
+    <!-- Cache Policy -->
+    <h3 class="section-title">DSPy Cache</h3>
+    <div class="form-group">
+        <label class="form-label">
+            <input type="checkbox" id="cache-for-optimization" checked>
+            Cache prompt optimization calls
+        </label>
+        <div class="form-help">Default: enabled. Cache hits are excluded from token usage.</div>
+    </div>
+    <div class="form-group">
+        <label class="form-label">
+            <input type="checkbox" id="cache-for-other">
+            Cache other model calls
+        </label>
+        <div class="form-help">Default: disabled.</div>
+    </div>
+
+    <!-- Thinking Parameters -->
+    <h3 class="section-title">Thinking / Reasoning</h3>
+    <div class="form-group">
+        <label class="form-label">
+            <input type="checkbox" id="thinking-enabled">
+            Enable thinking
+        </label>
+        <div class="form-help">Uses provider controls when available; otherwise the model uses its default thinking behavior.</div>
+    </div>
+    <div class="grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+        <div class="form-group">
+            <label class="form-label">Reasoning Effort</label>
+            <select id="reasoning-effort" class="form-select form-select-limited">
+                <option value="low">Low</option>
+                <option value="medium" selected>Medium</option>
+                <option value="high">High</option>
+            </select>
+            <div class="form-help">Used by OpenAI, OpenRouter and compatible endpoints when thinking is enabled.</div>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Thinking Budget Tokens</label>
+            <input type="number" id="thinking-budget-tokens" class="form-input form-input-limited" min="1" placeholder="Optional">
+            <div class="form-help">Optional explicit reasoning budget. Anthropic requires at least 1024 and max tokens must be greater than this value.</div>
+        </div>
     </div>
 
     <!-- Action Buttons -->
@@ -329,7 +374,12 @@
             max_tokens: parseInt(document.getElementById('max-tokens').value),
             top_p: document.getElementById('top-p').value ? parseFloat(document.getElementById('top-p').value) : null,
             top_k: document.getElementById('top-k').value ? parseInt(document.getElementById('top-k').value) : null,
-            min_p: document.getElementById('min-p').value ? parseFloat(document.getElementById('min-p').value) : null
+            min_p: document.getElementById('min-p').value ? parseFloat(document.getElementById('min-p').value) : null,
+            cache_for_optimization: document.getElementById('cache-for-optimization').checked,
+            cache_for_other: document.getElementById('cache-for-other').checked,
+            thinking_enabled: document.getElementById('thinking-enabled').checked,
+            reasoning_effort: document.getElementById('reasoning-effort').value,
+            thinking_budget_tokens: document.getElementById('thinking-budget-tokens').value ? parseInt(document.getElementById('thinking-budget-tokens').value) : null
         };
 
         try {
@@ -380,7 +430,12 @@
             max_tokens: parseInt(document.getElementById('max-tokens').value),
             top_p: document.getElementById('top-p').value ? parseFloat(document.getElementById('top-p').value) : null,
             top_k: document.getElementById('top-k').value ? parseInt(document.getElementById('top-k').value) : null,
-            min_p: document.getElementById('min-p').value ? parseFloat(document.getElementById('min-p').value) : null
+            min_p: document.getElementById('min-p').value ? parseFloat(document.getElementById('min-p').value) : null,
+            cache_for_optimization: document.getElementById('cache-for-optimization').checked,
+            cache_for_other: document.getElementById('cache-for-other').checked,
+            thinking_enabled: document.getElementById('thinking-enabled').checked,
+            reasoning_effort: document.getElementById('reasoning-effort').value,
+            thinking_budget_tokens: document.getElementById('thinking-budget-tokens').value ? parseInt(document.getElementById('thinking-budget-tokens').value) : null
         };
 
         try {

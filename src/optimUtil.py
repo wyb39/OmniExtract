@@ -292,9 +292,13 @@ def ai_evaluate(exam, pred, optim_settings):
         judge = dspy.ChainOfThought(_ai_evaluation_signature_1)
         try:
             llm = (
-                model_setting_instance_judge.configure_model()
+                model_setting_instance_judge.configure_model(
+                    for_optimization=True
+                )
                 if getattr(model_setting_instance_judge, "setting_status", False)
-                else model_setting_instance.configure_model()
+                else model_setting_instance.configure_model(
+                    for_optimization=True
+                )
             )
         except Exception as e:
             logger.error(f"Failed to configure judge llm: {e}")
@@ -323,9 +327,13 @@ def ai_evaluate(exam, pred, optim_settings):
         judge = dspy.ChainOfThought(_ai_evaluation_signature)
         try:
             llm = (
-                model_setting_instance_judge.configure_model()
+                model_setting_instance_judge.configure_model(
+                    for_optimization=True
+                )
                 if getattr(model_setting_instance_judge, "setting_status", False)
-                else model_setting_instance.configure_model()
+                else model_setting_instance.configure_model(
+                    for_optimization=True
+                )
             )
         except Exception as e:
             logger.error(f"Failed to configure judge llm: {e}")

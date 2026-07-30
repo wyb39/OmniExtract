@@ -90,6 +90,46 @@ Email notifications are optional. Configure `OMNI_EXTRACT_SMTP_SENDER` and
 `OMNI_EXTRACT_SMTP_PASSWORD` (plus the optional SMTP server variables) before
 starting the service to enable them.
 
+### Model runtime settings
+
+The supported model providers are `openai`, `vllm`, `ollama`, `qwen`,
+`deepseek`, `gemini`, `anthropic`, `sglang`, `openrouter`, and `custom`.
+Provider prefixes are normalized, so both `gpt-4.1` and `openai/gpt-4.1`
+produce the same OpenAI model identifier. Leave Gemini `api_base` empty to use
+LiteLLM's provider URL generation. Qwen accepts either `DASHSCOPE_API_KEY` or
+`QWEN_API_KEY` when no key is stored in the model settings.
+
+Two independent DSPy response-cache switches are available in model settings:
+
+- `cache_for_optimization` defaults to `true` and applies to `optim`,
+  `optim_custom`, image prompt optimization, and their model-based metrics.
+- `cache_for_other` defaults to `false` and applies to prediction, judging,
+  parsing, table extraction, and model connection tests.
+
+These switches control DSPy's local exact-response cache. They do not enable
+or disable a provider's prompt cache. Calls served by DSPy's response cache are
+excluded from `model_calls`, `input_tokens`, and `output_tokens` in the
+processing report.
+
+Thinking/reasoning settings consist of:
+
+- `thinking_enabled`: enables explicit provider controls when supported.
+- `reasoning_effort`: `low`, `medium`, or `high`.
+- `thinking_budget_tokens`: an optional provider-specific reasoning budget.
+
+OpenAI, OpenRouter, Anthropic, Qwen, vLLM, SGLang, and compatible custom
+endpoints receive provider-specific thinking parameters. With the pinned
+LiteLLM adapter, DeepSeek, Gemini, and Ollama use the selected model's native
+thinking behavior without additional request fields. Anthropic requires a
+thinking budget of at least 1024 tokens, and `max_tokens` must be greater than
+that budget.
+
+Sampling settings are validated before an LM is created. `temperature` must be
+between 0 and 2, `top_p` and `min_p` between 0 and 1, and `top_k` and token
+limits must be positive. `top_k` is rejected for OpenAI and DeepSeek. `min_p`
+is accepted only for vLLM, Ollama, SGLang, OpenRouter, and compatible custom
+endpoints.
+
 ### Processing error reports
 
 CLI commands and the four Jinja background workflows now create
@@ -131,7 +171,9 @@ provider-reported model token usage:
 `cached_input_tokens` records input tokens read from the provider's prompt
 cache. `cache_creation_input_tokens` records newly cached input tokens when the
 provider exposes that metric. Either cache field is `null` when the provider
-does not return enough information to calculate a complete total.
+does not return enough information to calculate a complete total. DSPy local
+response-cache hits are not provider calls and are not included in these
+totals.
 
 Detailed parser/model tracebacks remain in the application logs. Prompt
 optimization also keeps DSPy's original `optim.log`; its processing report

@@ -125,11 +125,13 @@ def _optim_impl(optim_settings: OptimSettings):
     logger.info("Loading optimization data...")
     list_dataset = loadCustomOptimData(optim_settings)
     _validate_optimization_dataset(list_dataset)
-    llm = model_setting_instance.configure_model()
+    llm = model_setting_instance.configure_model(for_optimization=True)
     dspy.configure(lm=llm)
     logger.info(llm)
     if model_setting_instance_prompt.setting_status:
-        llm_prompt = model_setting_instance_prompt.configure_model()
+        llm_prompt = model_setting_instance_prompt.configure_model(
+            for_optimization=True
+        )
     else:
         llm_prompt = llm
     logger.info("Building evaluation metric...")
@@ -181,10 +183,12 @@ def _optim_custom_impl(optim_settings: OptimSettings):
     logger.info("Loading optimization data...")
     list_dataset = loadCustomOptimData(optim_settings)
     _validate_optimization_dataset(list_dataset)
-    llm = model_setting_instance.configure_model()
+    llm = model_setting_instance.configure_model(for_optimization=True)
     dspy.configure(lm=llm)
     if model_setting_instance_prompt.setting_status:
-        llm_prompt = model_setting_instance_prompt.configure_model()
+        llm_prompt = model_setting_instance_prompt.configure_model(
+            for_optimization=True
+        )
     else:
         llm_prompt = llm
     logger.info("Building evaluation metric...")
@@ -232,7 +236,9 @@ def _optim_image_impl(optim_settings: OptimSettings):
     logger.info("Loading optimization data...")
     list_dataset = loadCustomOptimData(optim_settings)
     _validate_optimization_dataset(list_dataset)
-    llm_image = model_setting_instance_image.configure_model()
+    llm_image = model_setting_instance_image.configure_model(
+        for_optimization=True
+    )
     logger.info(llm_image)
     logger.info("Building evaluation metric...")
     custom_metric = createCustomMetric(optim_settings)
