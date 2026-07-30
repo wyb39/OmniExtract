@@ -26,6 +26,14 @@ from service import (
     parse_table_to_tsv,
     pred,
 )
+from error_handling import (
+    REPORT_FILENAME,
+    ReportedTaskError,
+    merge_report_files,
+    read_report,
+    write_failure_and_wrap,
+    write_report,
+)
 
 
 def _now() -> str:
@@ -148,17 +156,68 @@ def _run_workflow(
         result.setdefault("status", "success")
         result["workflow_id"] = workflow_id
         result["task_created_time"] = workflow_id
+        report_path = result.get("processing_report")
+        if isinstance(report_path, str) and os.path.isfile(report_path):
+            report = read_report(report_path).with_workflow_id(workflow_id)
+            write_report(report, report_path)
+            result["processing_status"] = report.processing_status
+        else:
+            result.setdefault("processing_status", "success")
+        workflow_status = (
+            "failed"
+            if result["processing_status"] == "failed"
+            else "completed"
+        )
+        result["status"] = result["processing_status"]
         _write_status(
             base_path,
-            "completed",
+            workflow_status,
             workflow_id=workflow_id,
             workflow_type=workflow_type,
             task_name=task_name,
             result=result,
         )
-        _notify(workflow_type, contact_email, task_name, result, attachments(result))
+        attachment_paths = list(attachments(result))
+        if isinstance(report_path, str) and os.path.isfile(report_path):
+            attachment_paths.append(report_path)
+        _notify(workflow_type, contact_email, task_name, result, attachment_paths)
         return result
     except Exception as exc:
+        if isinstance(exc, ReportedTaskError) and os.path.isfile(exc.report_path):
+            report_path = exc.report_path
+            report = read_report(report_path).with_workflow_id(workflow_id)
+            write_report(report, report_path)
+        else:
+            wrapped = write_failure_and_wrap(
+                exc,
+                base_path,
+                workflow_id=workflow_id,
+                stage=workflow_type,
+            )
+            report_path = wrapped.report_path
+            report = read_report(report_path)
+        # A later task-fatal error must not hide document failures already
+        # recorded by parsing/prediction stages.  Consolidate every report in
+        # the workspace into the single failed-workflow artifact.
+        report_paths = []
+        for root, _, files in os.walk(base_path):
+            if REPORT_FILENAME in files:
+                report_paths.append(os.path.join(root, REPORT_FILENAME))
+        if report_path not in report_paths:
+            report_paths.append(report_path)
+        report_path = merge_report_files(
+            report_paths,
+            os.path.join(base_path, REPORT_FILENAME),
+            workflow_id=workflow_id,
+            terminal_report_path=report_path,
+        )
+        report = read_report(report_path)
+        failed_result = {
+            "status": "failed",
+            "workflow_id": workflow_id,
+            "processing_status": report.processing_status,
+            "processing_report": report_path,
+        }
         _write_status(
             base_path,
             "failed",
@@ -166,8 +225,15 @@ def _run_workflow(
             workflow_type=workflow_type,
             task_name=task_name,
             error=str(exc),
+            result=failed_result,
         )
-        _notify(workflow_type, contact_email, task_name, {"status": "failed", "error": str(exc), "workflow_id": workflow_id})
+        _notify(
+            workflow_type,
+            contact_email,
+            task_name,
+            failed_result,
+            [report_path],
+        )
         logger.exception("{} workflow failed", workflow_type)
         raise
 
@@ -207,8 +273,21 @@ def run_workflow_doc_extraction(
         )
         prediction_result = pred(settings)
         result_file = os.path.join(target_dir, "result.json")
+        processing_report = merge_report_files(
+            [
+                parse_result.get("processing_report"),
+                prediction_result.get("processing_report"),
+            ],
+            os.path.join(target_dir, REPORT_FILENAME),
+            workflow_id=os.path.basename(base_path),
+        )
         result_zip = _zip_files(target_dir, os.path.join(target_dir, "result.zip"))
-        return {"result_file": result_file, "result_zip": result_zip, "prediction_result": prediction_result}
+        return {
+            "result_file": result_file,
+            "result_zip": result_zip,
+            "prediction_result": prediction_result,
+            "processing_report": processing_report,
+        }
 
     return _run_workflow("doc_extraction", task_name, contact_email, base_path, work, lambda result: [result["result_zip"]])
 
@@ -233,11 +312,16 @@ def run_workflow_prompt_optimization(
         parsed_dir = os.path.join(base_path, "parsed")
         optimized_dir = os.path.join(base_path, "optimized_prompt")
         _safe_extract(zip_file_path, source_dir, {".pdf", ".xml"})
-        file_to_json(source_dir, parsed_dir, file_type, convert_mode)
+        parse_result = file_to_json(
+            source_dir,
+            parsed_dir,
+            file_type,
+            convert_mode,
+        )
         input_dspy_fields = _fields(input_fields)
         output_dspy_fields = _fields(output_fields)
         article_parts = [field.name for field in input_dspy_fields] if convert_mode == "byPart" else None
-        build_optm_set(
+        dataset_result = build_optm_set(
             json_path=parsed_dir,
             dataset=dataset_file_path,
             save_dir=optimized_dir,
@@ -260,8 +344,22 @@ def run_workflow_prompt_optimization(
             ai_evaluation=True,
         )
         optimization_result = optim_custom(settings)
+        processing_report = merge_report_files(
+            [
+                parse_result.get("processing_report"),
+                dataset_result.get("processing_report"),
+                optimization_result.get("processing_report"),
+            ],
+            os.path.join(optimized_dir, REPORT_FILENAME),
+            workflow_id=os.path.basename(base_path),
+        )
         optimization_zip = _zip_files(optimized_dir, os.path.join(optimized_dir, "optimization_config.zip"))
-        return {"optimized_prompt_dir": optimized_dir, "optimization_config_zip": optimization_zip, "result": optimization_result}
+        return {
+            "optimized_prompt_dir": optimized_dir,
+            "optimization_config_zip": optimization_zip,
+            "result": optimization_result,
+            "processing_report": processing_report,
+        }
 
     return _run_workflow("prompt_optimization", task_name, contact_email, base_path, work, lambda result: [result["optimization_config_zip"]])
 
@@ -282,8 +380,13 @@ def run_workflow_table_extraction(
         parsed_dir = os.path.join(base_path, "parsed")
         result_dir = os.path.join(base_path, "result")
         _safe_extract(zip_file_path, source_dir)
-        parse_table_to_tsv(source_dir, parsed_dir, non_tabular_file_format=file_type, verbose=True)
-        extract_table_service(
+        parse_result = parse_table_to_tsv(
+            source_dir,
+            parsed_dir,
+            non_tabular_file_format=file_type,
+            verbose=True,
+        )
+        extraction_result = extract_table_service(
             parsed_file_path=parsed_dir,
             save_folder_path=result_dir,
             outputFields=_fields(output_fields),
@@ -291,11 +394,21 @@ def run_workflow_table_extraction(
             extract_prompt=extract_prompt,
             num_threads=threads,
         )
-        format_tables_dir = os.path.join(result_dir, "format_tables")
+        processing_report = merge_report_files(
+            [
+                parse_result.get("processing_report"),
+                extraction_result.get("processing_report"),
+            ],
+            os.path.join(result_dir, REPORT_FILENAME),
+            workflow_id=os.path.basename(base_path),
+        )
         format_tables_zip = os.path.join(result_dir, "format_tables.zip")
-        if os.path.isdir(format_tables_dir):
-            _zip_files(format_tables_dir, format_tables_zip)
-        return {"result_dir": result_dir, "format_tables_zip": format_tables_zip}
+        _zip_files(result_dir, format_tables_zip)
+        return {
+            "result_dir": result_dir,
+            "format_tables_zip": format_tables_zip,
+            "processing_report": processing_report,
+        }
 
     return _run_workflow("table_extraction", task_name, contact_email, base_path, work, lambda result: [result["format_tables_zip"]])
 
@@ -338,8 +451,21 @@ def run_workflow_doc_extraction_optimized(
         )
         prediction_result = pred(prediction_settings, prompt_dir=prompt_path)
         result_file = os.path.join(target_dir, "result.json")
+        processing_report = merge_report_files(
+            [
+                parse_result.get("processing_report"),
+                prediction_result.get("processing_report"),
+            ],
+            os.path.join(target_dir, REPORT_FILENAME),
+            workflow_id=os.path.basename(base_path),
+        )
         result_zip = _zip_files(target_dir, os.path.join(target_dir, "result.zip"))
-        return {"result_file": result_file, "result_zip": result_zip, "prediction_result": prediction_result}
+        return {
+            "result_file": result_file,
+            "result_zip": result_zip,
+            "prediction_result": prediction_result,
+            "processing_report": processing_report,
+        }
 
     return _run_workflow("doc_extraction_optimized", task_name, contact_email, base_path, work, lambda result: [result["result_zip"]])
 

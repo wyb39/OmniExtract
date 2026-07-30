@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from optimUtil import wrapOneDspyField, DspyField, create_output_model_class
 from model import model_setting_instance, model_setting_instance_judge
 from dspy.utils.parallelizer import ParallelExecutor
+from error_handling import Issue, ProcessingReport, run_isolated
 
 
 # class PredNovelSettings(OptimSettings):
@@ -268,87 +269,74 @@ def custom_judge_metric(
 
     logger.info(f"Starting judgment with {len(df)} rows using {num_threads} threads")
 
+    report = ProcessingReport("judgement")
     judge_dataset = []
     for index, row in df.iterrows():
+        identity = (
+            str(row.get("article_field"))
+            if row.get("article_field") is not None
+            and pd.notna(row.get("article_field"))
+            else f"row-{index}"
+        )
         try:
             missing_fields = [f for f in field_list if f not in row or pd.isna(row[f])]
             if missing_fields:
                 logger.warning(f"Row {index} missing fields: {missing_fields}")
+                report.failure(
+                    identity,
+                    Issue(
+                        stage="judgement",
+                        code="JUDGEMENT_INPUT_MISSING",
+                        message=f"Required judgement fields are empty: {missing_fields}",
+                        action="Correct the prediction input/output fields or disable judgement for this run.",
+                    ),
+                )
                 continue
 
             example = dspy.Example(
                 **{field: row[field] for field in df.columns}
             ).with_inputs(*field_list)
-            judge_dataset.append(example)
+            judge_dataset.append((identity, example))
         except Exception as e:
             logger.error(f"Error preparing row {index} for judgment: {e}")
+            report.failure(
+                identity,
+                Issue(
+                    stage="judgement",
+                    code="JUDGEMENT_INPUT_INVALID",
+                    message=str(e),
+                    action="Check this document's prediction fields and retry judgement.",
+                ),
+            )
             continue
 
     if not judge_dataset:
-        raise ValueError("No valid data to judge")
+        df_out = pd.DataFrame()
+        df_out.attrs["processing_report"] = report.to_dict()
+        return df_out
 
-    def process_item(example):
-        try:
-            try:
-                llm = (
-                    model_setting_instance_judge.configure_model()
-                    if getattr(model_setting_instance_judge, "setting_status", False)
-                    else model_setting_instance.configure_model()
-                )
-            except Exception as e:
-                logger.error(f"Failed to configure judge llm: {e}")
-                llm = None
-            return judge(lm=llm, **example.inputs())
-        except Exception as e:
-            logger.error(f"Error judging example: {e}")
-            raise
-
-    executor = ParallelExecutor(
-        num_threads=num_threads,
-        disable_progress_bar=True,
-        max_errors=5,
-        provide_traceback=False,
-        compare_results=False,
-    )
-
-    try:
-        results = executor.execute(process_item, judge_dataset)
-        logger.info(f"Successfully judged {len(results)} items")
-    except Exception as e:
-        logger.warning(
-            f"Parallel execution failed: {e}. Switching to sequential processing..."
+    def process_item(item):
+        _, example = item
+        llm = (
+            model_setting_instance_judge.configure_model()
+            if getattr(model_setting_instance_judge, "setting_status", False)
+            else model_setting_instance.configure_model()
         )
-        results = []
-        chunk_size = max(1, min(20, len(judge_dataset) // num_threads))
+        return judge(lm=llm, **example.inputs())
 
-        for i in range(0, len(judge_dataset), chunk_size):
-            chunk = judge_dataset[i : i + chunk_size]
-            chunk_executor = ParallelExecutor(
-                num_threads=min(num_threads, len(chunk)),
-                disable_progress_bar=True,
-                max_errors=5,
-                provide_traceback=False,
-                compare_results=False,
-            )
-            try:
-                chunk_results = chunk_executor.execute(process_item, chunk)
-                results.extend(chunk_results)
-                logger.debug(
-                    f"Processed chunk {i // chunk_size + 1}: {len(chunk_results)} items"
-                )
-            except Exception as chunk_error:
-                logger.error(f"Chunk processing failed: {chunk_error}")
-                # Fallback to individual processing
-                for example in chunk:
-                    try:
-                        result = process_item(example)
-                        results.append(result)
-                    except Exception as item_error:
-                        logger.error(f"Individual judgment failed: {item_error}")
-                        results.append(None)
+    outcomes, isolated_report = run_isolated(
+        judge_dataset,
+        process_item,
+        lambda item: item[0],
+        stage="judgement",
+        workflow_id="judgement",
+        max_workers=num_threads,
+    )
+    report.merge(isolated_report)
 
     list_out = []
-    for index, (example, result) in enumerate(zip(judge_dataset, results)):
+    for index, ((_, example), outcome) in enumerate(zip(judge_dataset, outcomes)):
+        result = outcome.value if outcome.issue is None else None
         try:
             result_dict = example.toDict()
             if result is not None:
@@ -372,6 +360,7 @@ def custom_judge_metric(
             list_out.append(result_dict)
 
     df_out = pd.DataFrame(list_out)
+    df_out.attrs["processing_report"] = report.to_dict()
     logger.info(f"Judgment completed. Output shape: {df_out.shape}")
     return df_out
 
@@ -449,12 +438,31 @@ def predCustomData(
     logger.info(f"Input fields: {input_field_list}")
     logger.info(f"Output fields: {output_field_list}")
 
-    # Data quality check
+    report = ProcessingReport(dataset_path.stem or "prediction")
+
+    # Data quality check.  Invalid rows are document-scoped failures rather
+    # than silently disappearing from the batch.
     missing_data = df[input_field_list].isnull().sum()
     if missing_data.any():
         logger.warning(
             f"Missing values found: {missing_data[missing_data > 0].to_dict()}"
         )
+        invalid = df[df[input_field_list].isnull().any(axis=1)]
+        for index, row in invalid.iterrows():
+            identity = (
+                str(row.get("article_field"))
+                if pd.notna(row.get("article_field"))
+                else f"row-{index}"
+            )
+            report.failure(
+                identity,
+                Issue(
+                    stage="prediction",
+                    code="PREDICTION_INPUT_MISSING",
+                    message="One or more required input fields are empty.",
+                    action="Fill every configured input field for this document and retry.",
+                ),
+            )
         df = df.dropna(subset=input_field_list)
         logger.info(f"Filtered dataset shape after removing NaN: {df.shape}")
 
@@ -466,84 +474,52 @@ def predCustomData(
         logger.warning(f"Invalid thread count {num_threads}, using 1")
         num_threads = 1
 
-    # Parallel prediction
-    executor = ParallelExecutor(
-        num_threads=num_threads,
-        disable_progress_bar=True,
-        max_errors=5,
-        provide_traceback=False,
-        compare_results=False,
-    )
-
     def predict_single_row(row):
         """Process single row prediction"""
-        try:
-            input_dict = {field: str(row[field]) for field in input_field_list}
-            result = predictor(**input_dict)
+        input_dict = {field: str(row[field]) for field in input_field_list}
+        result = predictor(**input_dict)
 
-            output_dict = {}
-            for field in output_field_list:
-                if prediction_settings.multiple:
-                    items = getattr(result, "extracted_information", [])
-                    output_dict["extracted_information"] = (
-                        [item.dict() for item in items] if items else []
-                    )
-                else:
-                    value = getattr(result, field, None)
-                    output_dict[field] = str(value) if value is not None else None
-
-            return output_dict
-
-        except Exception as e:
-            logger.warning(f"Prediction failed for row {row.name}: {e}")
+        output_dict = {}
+        for field in output_field_list:
             if prediction_settings.multiple:
-                return {"extracted_information": []}
+                items = getattr(result, "extracted_information", [])
+                output_dict["extracted_information"] = (
+                    [item.dict() for item in items] if items else []
+                )
             else:
-                return {field: None for field in output_field_list}
+                value = getattr(result, field, None)
+                if value is None:
+                    raise ValueError(f"Model response is missing output field: {field}")
+                output_dict[field] = str(value)
+        return output_dict
 
-    try:
-        results = executor.execute(
-            predict_single_row, [row for _, row in df.iterrows()]
+    rows = [row for _, row in df.iterrows()]
+
+    def identify(row):
+        article_id = row.get("article_field")
+        return (
+            str(article_id)
+            if article_id is not None and pd.notna(article_id)
+            else f"row-{row.name}"
         )
-    except Exception as e:
-        logger.warning(
-            f"Parallel execution failed: {e}, trying chunk-based parallel processing..."
-        )
 
-        # Chunk-based parallel processing fallback
-        results = []
-        chunk_size = max(1, min(20, len(df) // num_threads))
-
-        for i in range(0, len(df), chunk_size):
-            chunk = [row for _, row in df.iloc[i : i + chunk_size].iterrows()]
-            chunk_executor = ParallelExecutor(
-                num_threads=min(num_threads, len(chunk)),
-                disable_progress_bar=True,
-                max_errors=5,
-                provide_traceback=False,
-                compare_results=False,
-            )
-            try:
-                chunk_results = chunk_executor.execute(predict_single_row, chunk)
-                results.extend(chunk_results)
-                logger.debug(
-                    f"Processed chunk {i // chunk_size + 1}: {len(chunk_results)} items"
-                )
-            except Exception as chunk_error:
-                logger.error(
-                    f"Chunk processing failed: {chunk_error}, falling back to sequential processing"
-                )
-                # Sequential processing fallback
-                for row in chunk:
-                    try:
-                        result = predict_single_row(row)
-                        results.append(result)
-                    except Exception as item_error:
-                        logger.error(f"Individual prediction failed: {item_error}")
-                        if prediction_settings.multiple:
-                            results.append({"extracted_information": []})
-                        else:
-                            results.append({field: None for field in output_field_list})
+    outcomes, prediction_report = run_isolated(
+        rows,
+        predict_single_row,
+        identify,
+        stage="prediction",
+        workflow_id=dataset_path.stem or "prediction",
+        max_workers=num_threads,
+    )
+    report.merge(prediction_report)
+    results = []
+    for outcome in outcomes:
+        if outcome.issue is None:
+            results.append(outcome.value)
+        elif prediction_settings.multiple:
+            results.append({"extracted_information": []})
+        else:
+            results.append({field: None for field in output_field_list})
 
     # Validate result completeness
     logger.info(results)
@@ -562,6 +538,7 @@ def predCustomData(
             df[f"{field}"] = [result.get(field, None) for result in results]
 
     logger.info(f"Prediction completed successfully for {len(df)} examples")
+    df.attrs["processing_report"] = report.to_dict()
     return df
 
 

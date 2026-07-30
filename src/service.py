@@ -47,11 +47,59 @@ from tableExtractUtil import (
     generate_example_tables,
     generate_format_tables_with_extract4correct,
 )
+from error_handling import (
+    ProcessingReport,
+    REPORT_FILENAME,
+    ReportedTaskError,
+    map_exception,
+    write_failure_and_wrap,
+    write_report,
+)
+from processing_adapters import documents_to_json, process_table_documents
 
 
-def optim(optim_settings: OptimSettings):
-    llm = model_setting_instance.configure_model()
-    dspy.configure(lm=llm)
+def _validate_optimization_dataset(dataset):
+    """DSPy needs at least two valid examples for a useful train/validation split."""
+
+    try:
+        size = len(dataset)
+    except Exception as exc:
+        raise ValueError(
+            "Unable to determine the number of valid optimization records"
+        ) from exc
+    if size < 2:
+        raise ValueError(
+            "Optimization dataset must contain at least two valid records"
+        )
+
+
+def _reported_task(operation, save_dir, work, *, document_id="workflow"):
+    """Run a task-fatal boundary and always leave a report beside its output."""
+
+    workflow_id = os.path.basename(os.path.abspath(save_dir)) or operation
+    try:
+        result = work()
+    except ReportedTaskError:
+        raise
+    except Exception as exc:
+        raise write_failure_and_wrap(
+            exc,
+            save_dir,
+            workflow_id=workflow_id,
+            stage=operation,
+            document_id=document_id,
+        ) from exc
+
+    report = ProcessingReport(workflow_id)
+    report.success()
+    report_path = write_report(report, os.path.join(save_dir, REPORT_FILENAME))
+    if isinstance(result, dict):
+        result["processing_report"] = report_path
+        result["processing_status"] = report.processing_status
+    return result
+
+
+def _optim_impl(optim_settings: OptimSettings):
     save_dir = optim_settings.save_dir
     optimset = optim_settings.dataset
     if not os.path.exists(optimset):
@@ -66,12 +114,6 @@ def optim(optim_settings: OptimSettings):
     log_file = os.path.join(save_dir, "optim.log")
     logger.add(log_file, rotation="10 MB", retention="10 days", level="INFO")
 
-    logger.info(llm)
-    if model_setting_instance_prompt.setting_status:
-        llm_prompt = model_setting_instance_prompt.configure_model()
-    else:
-        llm_prompt = llm
-
     logger.info("Saving prompt optimization settings...")
     saveSettings(optim_settings)
     logger.info("Creating prediction signature...")
@@ -80,6 +122,14 @@ def optim(optim_settings: OptimSettings):
     predictor = dspy.Predict(custom_signature)
     logger.info("Loading optimization data...")
     list_dataset = loadCustomOptimData(optim_settings)
+    _validate_optimization_dataset(list_dataset)
+    llm = model_setting_instance.configure_model()
+    dspy.configure(lm=llm)
+    logger.info(llm)
+    if model_setting_instance_prompt.setting_status:
+        llm_prompt = model_setting_instance_prompt.configure_model()
+    else:
+        llm_prompt = llm
     logger.info("Building evaluation metric...")
     custom_metric = createCustomMetric(optim_settings)
     logger.info(custom_metric)
@@ -105,9 +155,7 @@ def optim(optim_settings: OptimSettings):
     return {"message": "optim success"}
 
 
-def optim_custom(optim_settings: OptimSettings):
-    llm = model_setting_instance.configure_model()
-    dspy.configure(lm=llm)
+def _optim_custom_impl(optim_settings: OptimSettings):
     save_dir = optim_settings.save_dir
     optimset = optim_settings.dataset
     if not os.path.exists(optimset):
@@ -122,11 +170,6 @@ def optim_custom(optim_settings: OptimSettings):
     log_file = os.path.join(save_dir, "optim.log")
     logger.add(log_file, rotation="10 MB", retention="10 days", level="INFO")
     logger.info(f"{optim_settings}")
-    if model_setting_instance_prompt.setting_status:
-        llm_prompt = model_setting_instance_prompt.configure_model()
-    else:
-        llm_prompt = llm
-
     logger.info("Saving prompt optimization settings...")
     saveSettings(optim_settings)
     logger.info("Creating prediction signature...")
@@ -135,6 +178,13 @@ def optim_custom(optim_settings: OptimSettings):
     predictor = dspy.Predict(custom_signature)
     logger.info("Loading optimization data...")
     list_dataset = loadCustomOptimData(optim_settings)
+    _validate_optimization_dataset(list_dataset)
+    llm = model_setting_instance.configure_model()
+    dspy.configure(lm=llm)
+    if model_setting_instance_prompt.setting_status:
+        llm_prompt = model_setting_instance_prompt.configure_model()
+    else:
+        llm_prompt = llm
     logger.info("Building evaluation metric...")
     custom_metric = createCustomMetric(optim_settings)
     # TODO customize the optimizer
@@ -159,9 +209,7 @@ def optim_custom(optim_settings: OptimSettings):
     return {"message": "optim success"}
 
 
-def optim_image(optim_settings: OptimSettings):
-    llm_image = model_setting_instance_image.configure_model()
-    logger.info(llm_image)
+def _optim_image_impl(optim_settings: OptimSettings):
     save_dir = optim_settings.save_dir
     optimset = optim_settings.dataset
     if not os.path.exists(optimset):
@@ -181,6 +229,9 @@ def optim_image(optim_settings: OptimSettings):
     predictor = dspy.Predict(custom_signature)
     logger.info("Loading optimization data...")
     list_dataset = loadCustomOptimData(optim_settings)
+    _validate_optimization_dataset(list_dataset)
+    llm_image = model_setting_instance_image.configure_model()
+    logger.info(llm_image)
     logger.info("Building evaluation metric...")
     custom_metric = createCustomMetric(optim_settings)
     logger.info(custom_metric)
@@ -205,7 +256,38 @@ def optim_image(optim_settings: OptimSettings):
     return {"message": "optim success"}
 
 
-def pred(
+def optim(optim_settings: OptimSettings):
+    """Run DSPy optimization with one actionable task-level failure report."""
+
+    return _reported_task(
+        "optimization",
+        optim_settings.save_dir,
+        lambda: _optim_impl(optim_settings),
+        document_id="optimization",
+    )
+
+
+def optim_custom(optim_settings: OptimSettings):
+    """Run custom optimization while retaining DSPy's detailed optim.log."""
+
+    return _reported_task(
+        "optimization",
+        optim_settings.save_dir,
+        lambda: _optim_custom_impl(optim_settings),
+        document_id="optimization",
+    )
+
+
+def optim_image(optim_settings: OptimSettings):
+    return _reported_task(
+        "optimization",
+        optim_settings.save_dir,
+        lambda: _optim_image_impl(optim_settings),
+        document_id="optimization",
+    )
+
+
+def _pred_impl(
     prediction_settings: PredictionSettings, prompt_dir="", output_file="result.json"
 ):
     llm = model_setting_instance.configure_model()
@@ -232,7 +314,22 @@ def pred(
         predictor.load(prompt_dir)
     logger.info(f"Predictor loaded: {predictor}")
     logger.info("Predicting...")
-    df_result = predCustomData(prediction_settings, predictor, lm=llm)
+    df_result = predCustomData(
+        prediction_settings,
+        predictor,
+        lm=llm,
+        num_threads=prediction_settings.threads,
+    )
+    report = ProcessingReport.from_dict(
+        df_result.attrs.get(
+            "processing_report",
+            {
+                "workflow_id": os.path.basename(os.path.abspath(save_dir)),
+                "processing_status": "success",
+                "failed_documents": [],
+            },
+        )
+    )
     logger.info("Judging...")
     judging = prediction_settings.judging
     if judging == "":
@@ -241,13 +338,48 @@ def pred(
     else:
         judge = judgeFactory(prediction_settings, judging)
         logger.info("Evaluating with judge...")
-        df_result_eval = custom_judge_metric(df_result, prediction_settings, judge)
+        df_result_eval = custom_judge_metric(
+            df_result,
+            prediction_settings,
+            judge,
+            num_threads=prediction_settings.threads,
+        )
+        judgement_report = df_result_eval.attrs.get("processing_report")
+        if isinstance(judgement_report, dict):
+            report.merge(ProcessingReport.from_dict(judgement_report))
         savePredictResult(df_result_eval, save_dir, output_file)
         logger.info(f"Evaluated results saved to {os.path.join(save_dir, output_file)}")
-        return {"message": "prediction success"}
+    report_path = write_report(report, os.path.join(save_dir, REPORT_FILENAME))
+    return {
+        "message": "prediction completed",
+        "result_file": os.path.join(save_dir, output_file),
+        "processing_report": report_path,
+        "processing_status": report.processing_status,
+    }
 
 
-def md_to_json(folder_path, save_path, convert_mode):
+def pred(
+    prediction_settings: PredictionSettings, prompt_dir="", output_file="result.json"
+):
+    """Run prediction; row failures are reported without cancelling siblings."""
+
+    try:
+        return _pred_impl(prediction_settings, prompt_dir, output_file)
+    except ReportedTaskError:
+        raise
+    except Exception as exc:
+        raise write_failure_and_wrap(
+            exc,
+            prediction_settings.save_dir,
+            workflow_id=os.path.basename(
+                os.path.abspath(prediction_settings.save_dir)
+            )
+            or "prediction",
+            stage="prediction",
+        ) from exc
+
+
+def _md_to_json_impl(folder_path, save_path, convert_mode):
     """
     Convert markdown files to JSON format based on specified conversion mode
 
@@ -289,6 +421,16 @@ def md_to_json(folder_path, save_path, convert_mode):
         }
 
 
+def md_to_json(folder_path, save_path, convert_mode):
+    """Convert Markdown and return the report path with the result."""
+
+    return _reported_task(
+        "json_convert",
+        save_path,
+        lambda: _md_to_json_impl(folder_path, save_path, convert_mode),
+    )
+
+
 def file_to_md(folder_path, save_path, file_type):
     """
     Convert files in the specified folder to Markdown format and save them
@@ -305,20 +447,66 @@ def file_to_md(folder_path, save_path, file_type):
         ValueError: Raised when an invalid folder path is provided or the file type is not supported
     """
 
-    # Call the corresponding parsing method based on file type
-    file_type = file_type.lower()
-    if file_type == "pdf":
-        return parse_article_to_md(folder_path, save_path)
-    elif file_type == "sciencedirect":
-        return parse_xml_to_md(folder_path, save_path)
-    elif file_type == "pmc":
-        return parse_pubmed_xml_to_md(folder_path, save_path)
-    elif file_type == "arxiv":
-        return parse_tex_to_md_batch(folder_path, save_path)
-    else:
+    # Preserve the long-standing list return type used by API clients.  The
+    # richer file_to_json path uses the single-document adapter; here we infer
+    # omissions from the batch parser and persist the same report contract.
+    converters = {
+        "pdf": parse_article_to_md,
+        "sciencedirect": parse_xml_to_md,
+        "pmc": parse_pubmed_xml_to_md,
+        "arxiv": parse_tex_to_md_batch,
+    }
+    normalised = str(file_type).lower()
+    if normalised not in converters:
         raise ValueError(
-            f"Unsupported file type: {file_type}\nSupported types: PDF, scienceDirect, PMC, Arxiv"
+            f"Unsupported file type: {file_type}\n"
+            "Supported types: PDF, scienceDirect, PMC, Arxiv"
         )
+    try:
+        markdown_files = converters[normalised](folder_path, save_path)
+        report = ProcessingReport(
+            os.path.basename(os.path.abspath(save_path)) or "file_to_md"
+        )
+        source_path = os.path.abspath(folder_path)
+        suffix = ".pdf" if normalised == "pdf" else ".xml"
+        if normalised == "arxiv":
+            suffix = ".tex"
+        sources = [
+            path
+            for root, _, files in os.walk(source_path)
+            for name in files
+            if name.lower().endswith(suffix)
+            for path in [os.path.join(root, name)]
+        ] if os.path.isdir(source_path) else []
+        converted_stems = {
+            os.path.splitext(os.path.basename(path))[0]
+            for path in markdown_files
+        }
+        for source in sources:
+            if os.path.splitext(os.path.basename(source))[0] in converted_stems:
+                report.success()
+            else:
+                report.failure(
+                    os.path.relpath(source, source_path).replace(os.sep, "/"),
+                    map_exception(
+                        RuntimeError("The parser did not generate Markdown output"),
+                        "markdown_convert",
+                    ),
+                )
+        if not sources:
+            report.success(len(markdown_files) or 1)
+        write_report(report, os.path.join(save_path, REPORT_FILENAME))
+        return markdown_files
+    except ReportedTaskError:
+        raise
+    except Exception as exc:
+        raise write_failure_and_wrap(
+            exc,
+            save_path,
+            workflow_id=os.path.basename(os.path.abspath(save_path))
+            or "file_to_md",
+            stage="document_parse",
+        ) from exc
 
 
 def file_to_json(
@@ -343,31 +531,45 @@ def file_to_json(
         ValueError: Raised when invalid paths, file type, or conversion mode is provided
     """
 
-    # Create a temporary directory for markdown files
-    with tempfile.TemporaryDirectory() as temp_md_dir:
-        logger.info(f"Created temporary directory for markdown files: {temp_md_dir}")
-
-        # Step 1: Convert files to markdown
-        logger.info(f"Converting {file_type} files to markdown...")
-        md_files = file_to_md(
+    try:
+        json_files, report = documents_to_json(
             folder_path,
-            temp_md_dir,
+            save_path,
             file_type,
+            convert_mode,
         )
-        logger.info(f"Successfully converted {len(md_files)} files to markdown")
+        dataset_file = merge_json_files_to_dataset(save_path)
+        report_path = write_report(
+            report,
+            os.path.join(save_path, REPORT_FILENAME),
+        )
+        return {
+            "message": (
+                f"Converted {len(json_files)} {file_type} document(s) "
+                f"to JSON with {convert_mode} mode"
+            ),
+            "details": {
+                "dataset_file": dataset_file,
+                "json_files": json_files,
+                "processing_report": report_path,
+                "processing_status": report.processing_status,
+            },
+            "processing_report": report_path,
+            "processing_status": report.processing_status,
+        }
+    except ReportedTaskError:
+        raise
+    except Exception as exc:
+        raise write_failure_and_wrap(
+            exc,
+            save_path,
+            workflow_id=os.path.basename(os.path.abspath(save_path))
+            or "file_to_json",
+            stage="document_parse",
+        ) from exc
 
-        # Step 2: Convert markdown to json
-        logger.info(f"Converting markdown files to JSON with mode: {convert_mode}...")
-        result = md_to_json(temp_md_dir, save_path, convert_mode)
-        logger.info("Successfully converted markdown files to JSON")
 
-    return {
-        "message": f"Successfully converted {file_type} files to JSON with {convert_mode} mode",
-        "details": result,
-    }
-
-
-def parse_table_to_tsv(
+def _parse_table_to_tsv_impl(
     file_folder_path: str,
     save_folder_path: str,
     non_tabular_file_format: Literal["PDF", "scienceDirect", "PMC", "Arxiv"]
@@ -473,7 +675,72 @@ def parse_table_to_tsv(
     return err_files
 
 
-def build_optm_set(
+def parse_table_to_tsv(
+    file_folder_path: str,
+    save_folder_path: str,
+    non_tabular_file_format: Literal["PDF", "scienceDirect", "PMC", "Arxiv"]
+    | None = None,
+    encoding: str = "utf-8",
+    verbose: bool = False,
+):
+    """Parse each document's tables and expose parser-returned file failures."""
+
+    workflow_id = os.path.basename(os.path.abspath(save_folder_path)) or "tables"
+    try:
+        errors = _parse_table_to_tsv_impl(
+            file_folder_path,
+            save_folder_path,
+            non_tabular_file_format,
+            encoding,
+            verbose,
+        )
+        report = ProcessingReport(workflow_id)
+        error_names = set()
+        for value in errors or []:
+            if isinstance(value, (tuple, list)) and value:
+                document_id = str(value[0])
+                message = str(value[1]) if len(value) > 1 else "Table parsing failed"
+            else:
+                document_id = str(value)
+                message = "Table parsing failed"
+            error_names.add(os.path.basename(document_id))
+            report.failure(
+                document_id,
+                map_exception(
+                    RuntimeError(message),
+                    "table_parse",
+                ),
+            )
+        input_files = [
+            item
+            for item in os.listdir(file_folder_path)
+            if os.path.isfile(os.path.join(file_folder_path, item))
+        ]
+        report.success(
+            sum(os.path.basename(item) not in error_names for item in input_files)
+        )
+        report_path = write_report(
+            report,
+            os.path.join(save_folder_path, REPORT_FILENAME),
+        )
+        return {
+            "message": "parse_table_to_tsv completed",
+            "errors": errors or [],
+            "processing_status": report.processing_status,
+            "processing_report": report_path,
+        }
+    except ReportedTaskError:
+        raise
+    except Exception as exc:
+        raise write_failure_and_wrap(
+            exc,
+            save_folder_path,
+            workflow_id=workflow_id,
+            stage="table_parse",
+        ) from exc
+
+
+def _build_optm_set_impl(
     json_path: str,
     dataset: str,
     save_dir: str,
@@ -534,7 +801,47 @@ def build_optm_set(
     return result[:5] if len(result) > 5 else result
 
 
-def extract_table_service(
+def build_optm_set(
+    json_path: str,
+    dataset: str,
+    save_dir: str,
+    fields: list[DspyField],
+    multiple: bool,
+    article_field: str,
+    article_parts: list[
+        Literal[
+            "Title",
+            "Abstract",
+            "Introduction",
+            "Method",
+            "Result",
+            "Discussion",
+            "Conclusion",
+        ]
+    ]
+    | None,
+):
+    return _reported_task(
+        "optimization",
+        save_dir,
+        lambda: {
+            "message": "Optimization dataset built",
+            "preview": _build_optm_set_impl(
+                json_path,
+                dataset,
+                save_dir,
+                fields,
+                multiple,
+                article_field,
+                article_parts,
+            ),
+            "dataset_file": os.path.join(save_dir, "_optim_dataset.json"),
+        },
+        document_id="optimization",
+    )
+
+
+def _extract_table_service_impl(
     parsed_file_path: str,
     save_folder_path: str,
     outputFields: list[DspyField],
@@ -646,3 +953,52 @@ def extract_table_service(
         "message": "Table extraction completed successfully",
         "format_table_path": format_table_path,
     }
+
+
+def extract_table_service(
+    parsed_file_path: str,
+    save_folder_path: str,
+    outputFields: list[DspyField],
+    classify_prompt: str,
+    extract_prompt: str,
+    extract_directly: bool = False,
+    num_threads: int = 6,
+    encoding: str = "utf-8",
+):
+    workflow_id = (
+        os.path.basename(os.path.abspath(save_folder_path)) or "table_extraction"
+    )
+    try:
+        results, report = process_table_documents(
+            parsed_file_path,
+            save_folder_path,
+            lambda source, destination: _extract_table_service_impl(
+                str(source),
+                str(destination),
+                outputFields,
+                classify_prompt,
+                extract_prompt,
+                extract_directly,
+                num_threads,
+                encoding,
+            ),
+        )
+        report_path = write_report(
+            report,
+            os.path.join(save_folder_path, REPORT_FILENAME),
+        )
+        return {
+            "message": "Table extraction completed",
+            "document_results": results,
+            "processing_status": report.processing_status,
+            "processing_report": report_path,
+        }
+    except ReportedTaskError:
+        raise
+    except Exception as exc:
+        raise write_failure_and_wrap(
+            exc,
+            save_folder_path,
+            workflow_id=workflow_id,
+            stage="table_extract",
+        ) from exc

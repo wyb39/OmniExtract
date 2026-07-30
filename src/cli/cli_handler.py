@@ -27,6 +27,7 @@ from params import (
 from optimUtil import OptimSettings
 from evalUtil import PredictionSettings
 from .yamlParser import yaml_to_class
+from error_handling import ReportedTaskError
 
 
 def get_model_settings(model_usage):
@@ -70,9 +71,9 @@ def run_optim(data):
     try:
         logger.info(f"optim data: {data}")
         optim_settings = OptimSettings.model_validate(data)
-        optim(optim_settings)
+        result = optim(optim_settings)
         logger.info("Optim completed")
-        return {"message": "optim completed"}
+        return result
     except Exception as e:
         logger.error(f"Exception optim error: {e}")
         raise
@@ -82,9 +83,9 @@ def run_optim_custom(data):
     try:
         logger.info(f"optim data: {data}")
         optim_settings = OptimSettings.model_validate(data)
-        optim_custom(optim_settings)
+        result = optim_custom(optim_settings)
         logger.info("Optim custom completed")
-        return {"message": "optim completed"}
+        return result
     except Exception as e:
         logger.error(f"Exception optim error: {e}")
         raise
@@ -103,11 +104,11 @@ def run_pred_optimized(data):
         prompt_dir = os.path.join(data["load_dir"], "optim_prompt.json")
         if not os.path.exists(prompt_dir):
             raise FileNotFoundError("prompt.json not found")
-        pred(
+        result = pred(
             prediction_settings, prompt_dir=prompt_dir, output_file=data["output_file"]
         )
         logger.info("Prediction completed")
-        return {"message": "prediction completed"}
+        return result
     except Exception as e:
         logger.error(f"Exception pred error: {e}")
         raise
@@ -116,9 +117,9 @@ def run_pred_optimized(data):
 def run_pred_original(data):
     try:
         prediction_settings = PredictionSettings.model_validate(data)
-        pred(prediction_settings)
+        result = pred(prediction_settings)
         logger.info("Prediction completed")
-        return {"message": "prediction completed"}
+        return result
     except Exception as e:
         logger.error(f"Exception pred error: {e}")
         raise
@@ -146,7 +147,14 @@ def run_file_to_md(data):
             path_settings.file_type,
         )
         logger.info("file_to_md completed")
-        return {"message": "file_to_md completed", "result": result}
+        return {
+            "message": "file_to_md completed",
+            "result": result,
+            "processing_report": os.path.join(
+                path_settings.save_path,
+                "processing_report.json",
+            ),
+        }
     except Exception as e:
         logger.error(f"Exception file_to_md error: {e}")
         raise
@@ -311,6 +319,20 @@ def main():
 
         logger.info(f"Command {command} executed successfully")
         print(json.dumps(result, indent=2, ensure_ascii=False))
+    except ReportedTaskError as e:
+        logger.error(f"Failed to execute command: {e}")
+        print(
+            json.dumps(
+                {
+                    "status": "failed",
+                    "processing_report": e.report_path,
+                    "issue": e.issue.to_dict(),
+                },
+                indent=2,
+                ensure_ascii=False,
+            )
+        )
+        raise SystemExit(1)
     except Exception as e:
         logger.error(f"Failed to execute command: {e}")
         raise

@@ -1499,7 +1499,19 @@ def merge_json_files_to_dataset(json_folder_path, output_path="_dataset.json"):
         raise ValueError(f"Path is not a directory: {json_folder_path}")
     
     # Get all JSON files
-    json_files = [f for f in os.listdir(json_folder_path) if f.endswith(".json")]
+    # Exclude only files produced by this workflow.  A source document may
+    # legitimately be named ``_paper.json`` and must remain in the dataset.
+    generated_metadata = {
+        os.path.basename(output_path),
+        "processing_report.json",
+        "workflow_status.json",
+    }
+    json_files = [
+        f
+        for f in os.listdir(json_folder_path)
+        if f.endswith(".json")
+        and f not in generated_metadata
+    ]
     
     if not json_files:
         logger.warning(f"No JSON files found in directory {json_folder_path}")

@@ -175,7 +175,12 @@ def _public_status(workflow_id: str, raw: Dict[str, Any], request: Request, toke
     result = raw.get("result") if isinstance(raw.get("result"), dict) else {}
     workspace = _workspace(workflow_id)
     artifacts = []
-    for key in ("result_zip", "optimization_config_zip", "format_tables_zip"):
+    for key in (
+        "result_zip",
+        "optimization_config_zip",
+        "format_tables_zip",
+        "processing_report",
+    ):
         value = result.get(key)
         if not isinstance(value, str):
             continue
@@ -197,6 +202,19 @@ def _public_status(workflow_id: str, raw: Dict[str, Any], request: Request, toke
         })
     public = {key: raw[key] for key in ("status", "workflow_id", "workflow_type", "task_name", "updated_at", "error") if key in raw}
     public["workflow_id"] = workflow_id
+    report_path = result.get("processing_report")
+    if isinstance(report_path, str) and os.path.isfile(report_path):
+        try:
+            with open(report_path, "r", encoding="utf-8") as handle:
+                report = json.load(handle)
+            public["processing_status"] = report.get("processing_status")
+            public["failed_documents"] = report.get("failed_documents", [])
+        except (OSError, json.JSONDecodeError):
+            public["processing_status"] = result.get("processing_status", "failed")
+            public["failed_documents"] = []
+    elif "processing_status" in result:
+        public["processing_status"] = result["processing_status"]
+        public["failed_documents"] = []
     public["artifacts"] = artifacts
     return public
 

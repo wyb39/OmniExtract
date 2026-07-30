@@ -74,8 +74,7 @@ def modify_model(data: ModelSettings):
 async def optimapi(data: OptimSettings):
     try:
         logger.info(f"optim data:{data}")
-        optim(data)
-        return {"message": "optim completed"}
+        return optim(data)
     except Exception as e:
         logger.info(f"Exception optim error:{e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -85,8 +84,7 @@ async def optimapi(data: OptimSettings):
 async def optimapi_custom(data: OptimSettings):
     try:
         logger.info(f"optim data:{data}")
-        optim_custom(data)
-        return {"message": "optim completed"}
+        return optim_custom(data)
     except Exception as e:
         logger.info(f"Exception optim error:{e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -116,8 +114,11 @@ async def predapi(data: PredTrainedSettings):
         prompt_dir = os.path.join(data.load_dir, "optim_prompt.json")
         if not os.path.exists(prompt_dir):
             raise HTTPException(status_code=500, detail="prompt.json not found")
-        pred(prediction_settings, prompt_dir=prompt_dir, output_file=data.output_file)
-        return {"message": "prediction completed"}
+        return pred(
+            prediction_settings,
+            prompt_dir=prompt_dir,
+            output_file=data.output_file,
+        )
     except Exception as e:
         logger.info(f"Exception pred error:{e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -126,8 +127,7 @@ async def predapi(data: PredTrainedSettings):
 @router.post("/api/pred_original")
 async def predapi_original(data: PredictionSettings):
     try:
-        pred(data)
-        return {"message": "prediction completed"}
+        return pred(data)
     except Exception as e:
         logger.info(f"Exception pred error:{e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -148,7 +148,14 @@ async def file_to_md_api(data: PathSettings):
             data.save_path,
             data.file_type,
         )
-        return {"message": "file_to_md completed", "result": result}
+        return {
+            "message": "file_to_md completed",
+            "result": result,
+            "processing_report": os.path.join(
+                data.save_path,
+                "processing_report.json",
+            ),
+        }
     except Exception as e:
         logger.info(f"Exception file_to_md error: {e}")
         raise HTTPException(status_code=500, detail=str(e))

@@ -90,6 +90,59 @@ Email notifications are optional. Configure `OMNI_EXTRACT_SMTP_SENDER` and
 `OMNI_EXTRACT_SMTP_PASSWORD` (plus the optional SMTP server variables) before
 starting the service to enable them.
 
+### Processing error reports
+
+CLI commands and the four Jinja background workflows now create
+`processing_report.json` beside their result files. A failed document is
+isolated from the other documents in the same batch. Therefore, a workflow can
+finish with `processing_status: "partial"` and still return all usable results.
+
+The user-facing report intentionally contains only the workflow identifier,
+the processing status, and documents whose results were affected:
+
+```json
+{
+  "workflow_id": "20260730_182514_567020_43c4ac02",
+  "processing_status": "partial",
+  "failed_documents": [
+    {
+      "document_id": "broken.pdf",
+      "issues": [
+        {
+          "stage": "markdown_convert",
+          "code": "MARKDOWN_GENERATION_FAILED",
+          "message": "The parser did not generate Markdown output",
+          "action": "Check the source document or try another supported parser.",
+          "retryable": false
+        }
+      ]
+    }
+  ]
+}
+```
+
+Detailed parser/model tracebacks remain in the application logs. Prompt
+optimization also keeps DSPy's original `optim.log`; its processing report
+only explains the main failure and the recommended correction. An optimization
+dataset must contain at least two complete, valid records.
+
+For CLI runs, the JSON printed at completion includes `processing_report`.
+When a task-level failure occurs, the CLI prints the report path and exits with
+a non-zero status. For Jinja workflows, the status page lists affected
+documents and exposes `processing_report.json` as a downloadable artifact.
+The report is also included inside the returned result ZIP.
+
+The production mechanism is concentrated in two commented modules:
+`src/error_handling.py` defines the report contract, exception mapping and
+isolated batch executor; `src/processing_adapters.py` provides the
+single-document parsing boundary. The existing service, CLI and workflow files
+only contain integration calls.
+
+Runtime output under `process/`, the local `error_handling_experiment/`
+workspace, and `settings/model_settings_*.json` are ignored by Git. Model
+settings may contain credentials and must be configured locally on each
+deployment.
+
 For Linux server deployment, set a password to encrypt the model `api_key` and expose the service externally:
 First, modify `gui/app.py` to listen on all interfaces by changing the default host to `0.0.0.0` (replace `os.environ.get("HOST", "127.0.0.1")` with `os.environ.get("HOST", "0.0.0.0")`).
 ```bash
