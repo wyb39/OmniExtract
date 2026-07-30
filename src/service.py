@@ -56,6 +56,7 @@ from error_handling import (
     write_report,
 )
 from processing_adapters import documents_to_json, process_table_documents
+from token_usage import track_token_usage
 
 
 def _validate_optimization_dataset(dataset):
@@ -77,26 +78,27 @@ def _reported_task(operation, save_dir, work, *, document_id="workflow"):
     """Run a task-fatal boundary and always leave a report beside its output."""
 
     workflow_id = os.path.basename(os.path.abspath(save_dir)) or operation
-    try:
-        result = work()
-    except ReportedTaskError:
-        raise
-    except Exception as exc:
-        raise write_failure_and_wrap(
-            exc,
-            save_dir,
-            workflow_id=workflow_id,
-            stage=operation,
-            document_id=document_id,
-        ) from exc
+    with track_token_usage():
+        try:
+            result = work()
+        except ReportedTaskError:
+            raise
+        except Exception as exc:
+            raise write_failure_and_wrap(
+                exc,
+                save_dir,
+                workflow_id=workflow_id,
+                stage=operation,
+                document_id=document_id,
+            ) from exc
 
-    report = ProcessingReport(workflow_id)
-    report.success()
-    report_path = write_report(report, os.path.join(save_dir, REPORT_FILENAME))
-    if isinstance(result, dict):
-        result["processing_report"] = report_path
-        result["processing_status"] = report.processing_status
-    return result
+        report = ProcessingReport(workflow_id)
+        report.success()
+        report_path = write_report(report, os.path.join(save_dir, REPORT_FILENAME))
+        if isinstance(result, dict):
+            result["processing_report"] = report_path
+            result["processing_status"] = report.processing_status
+        return result
 
 
 def _optim_impl(optim_settings: OptimSettings):
@@ -363,20 +365,21 @@ def pred(
 ):
     """Run prediction; row failures are reported without cancelling siblings."""
 
-    try:
-        return _pred_impl(prediction_settings, prompt_dir, output_file)
-    except ReportedTaskError:
-        raise
-    except Exception as exc:
-        raise write_failure_and_wrap(
-            exc,
-            prediction_settings.save_dir,
-            workflow_id=os.path.basename(
-                os.path.abspath(prediction_settings.save_dir)
-            )
-            or "prediction",
-            stage="prediction",
-        ) from exc
+    with track_token_usage():
+        try:
+            return _pred_impl(prediction_settings, prompt_dir, output_file)
+        except ReportedTaskError:
+            raise
+        except Exception as exc:
+            raise write_failure_and_wrap(
+                exc,
+                prediction_settings.save_dir,
+                workflow_id=os.path.basename(
+                    os.path.abspath(prediction_settings.save_dir)
+                )
+                or "prediction",
+                stage="prediction",
+            ) from exc
 
 
 def _md_to_json_impl(folder_path, save_path, convert_mode):
@@ -968,37 +971,38 @@ def extract_table_service(
     workflow_id = (
         os.path.basename(os.path.abspath(save_folder_path)) or "table_extraction"
     )
-    try:
-        results, report = process_table_documents(
-            parsed_file_path,
-            save_folder_path,
-            lambda source, destination: _extract_table_service_impl(
-                str(source),
-                str(destination),
-                outputFields,
-                classify_prompt,
-                extract_prompt,
-                extract_directly,
-                num_threads,
-                encoding,
-            ),
-        )
-        report_path = write_report(
-            report,
-            os.path.join(save_folder_path, REPORT_FILENAME),
-        )
-        return {
-            "message": "Table extraction completed",
-            "document_results": results,
-            "processing_status": report.processing_status,
-            "processing_report": report_path,
-        }
-    except ReportedTaskError:
-        raise
-    except Exception as exc:
-        raise write_failure_and_wrap(
-            exc,
-            save_folder_path,
-            workflow_id=workflow_id,
-            stage="table_extract",
-        ) from exc
+    with track_token_usage():
+        try:
+            results, report = process_table_documents(
+                parsed_file_path,
+                save_folder_path,
+                lambda source, destination: _extract_table_service_impl(
+                    str(source),
+                    str(destination),
+                    outputFields,
+                    classify_prompt,
+                    extract_prompt,
+                    extract_directly,
+                    num_threads,
+                    encoding,
+                ),
+            )
+            report_path = write_report(
+                report,
+                os.path.join(save_folder_path, REPORT_FILENAME),
+            )
+            return {
+                "message": "Table extraction completed",
+                "document_results": results,
+                "processing_status": report.processing_status,
+                "processing_report": report_path,
+            }
+        except ReportedTaskError:
+            raise
+        except Exception as exc:
+            raise write_failure_and_wrap(
+                exc,
+                save_folder_path,
+                workflow_id=workflow_id,
+                stage="table_extract",
+            ) from exc

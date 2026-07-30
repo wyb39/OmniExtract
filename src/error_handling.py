@@ -12,10 +12,13 @@ import json
 import os
 import re
 import tempfile
+from contextvars import copy_context
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, Sequence, TypeVar
+
+from token_usage import TokenUsage, current_token_usage
 
 
 REPORT_FILENAME = "processing_report.json"
@@ -155,6 +158,7 @@ class ProcessingReport:
 
     workflow_id: str
     succeeded: int = 0
+    token_usage: TokenUsage = field(default_factory=TokenUsage)
     _failed: dict[str, list[Issue]] = field(default_factory=dict)
     _status_override: str | None = field(default=None, repr=False)
 
@@ -175,6 +179,7 @@ class ProcessingReport:
 
     def merge(self, other: "ProcessingReport") -> "ProcessingReport":
         self.succeeded += other.succeeded
+        self.token_usage.add(other.token_usage)
         for document_id, issues in other._failed.items():
             self._failed.setdefault(document_id, []).extend(issues)
         return self
@@ -203,11 +208,13 @@ class ProcessingReport:
                 }
                 for document_id, issues in self._failed.items()
             ],
+            "token_usage": self.token_usage.to_dict(),
         }
 
     @classmethod
     def from_dict(cls, value: Mapping[str, Any]) -> "ProcessingReport":
         report = cls(str(value.get("workflow_id", "task")))
+        report.token_usage = TokenUsage.from_report_dict(value.get("token_usage"))
         status = value.get("processing_status")
         if status in {"success", "partial"}:
             report.success()
@@ -256,6 +263,13 @@ def write_report(
     path = Path(destination).expanduser().resolve()
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = report.to_dict() if isinstance(report, ProcessingReport) else dict(report)
+    tracked_usage = current_token_usage()
+    if tracked_usage is not None:
+        if isinstance(report, ProcessingReport):
+            report.token_usage = tracked_usage
+            payload = report.to_dict()
+        else:
+            payload["token_usage"] = tracked_usage.to_dict()
     temporary: Path | None = None
     try:
         with tempfile.NamedTemporaryFile(
@@ -377,7 +391,12 @@ def run_isolated(
     else:
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {
-                executor.submit(execute, index, item): index
+                executor.submit(
+                    copy_context().run,
+                    execute,
+                    index,
+                    item,
+                ): index
                 for index, item in enumerate(values)
             }
             for future in as_completed(futures):

@@ -97,8 +97,8 @@ CLI commands and the four Jinja background workflows now create
 isolated from the other documents in the same batch. Therefore, a workflow can
 finish with `processing_status: "partial"` and still return all usable results.
 
-The user-facing report intentionally contains only the workflow identifier,
-the processing status, and documents whose results were affected:
+The report contains the workflow result, affected documents, and aggregated
+provider-reported model token usage:
 
 ```json
 {
@@ -117,9 +117,21 @@ the processing status, and documents whose results were affected:
         }
       ]
     }
-  ]
+  ],
+  "token_usage": {
+    "model_calls": 3,
+    "input_tokens": 12480,
+    "output_tokens": 936,
+    "cached_input_tokens": 8192,
+    "cache_creation_input_tokens": null
+  }
 }
 ```
+
+`cached_input_tokens` records input tokens read from the provider's prompt
+cache. `cache_creation_input_tokens` records newly cached input tokens when the
+provider exposes that metric. Either cache field is `null` when the provider
+does not return enough information to calculate a complete total.
 
 Detailed parser/model tracebacks remain in the application logs. Prompt
 optimization also keeps DSPy's original `optim.log`; its processing report
@@ -132,10 +144,11 @@ a non-zero status. For Jinja workflows, the status page lists affected
 documents and exposes `processing_report.json` as a downloadable artifact.
 The report is also included inside the returned result ZIP.
 
-The production mechanism is concentrated in two commented modules:
+The production mechanism is concentrated in three commented modules:
 `src/error_handling.py` defines the report contract, exception mapping and
 isolated batch executor; `src/processing_adapters.py` provides the
-single-document parsing boundary. The existing service, CLI and workflow files
+single-document parsing boundary; and `src/token_usage.py` normalizes and
+aggregates provider usage fields. The existing service, CLI and workflow files
 only contain integration calls.
 
 Runtime output under `process/`, the local `error_handling_experiment/`

@@ -12,6 +12,7 @@ import os
 from loguru import logger
 import dspy
 from secure_api_key import SecureAPIKeyManager
+from token_usage import record_provider_usage
 
 ModelProvider = Literal[
     "openai",
@@ -26,6 +27,26 @@ ModelProvider = Literal[
     "openrouter",
     "custom",
 ]
+
+
+class TokenTrackingLM(dspy.LM):
+    """DSPy LM that forwards each provider usage block to the active report."""
+
+    def __call__(self, prompt=None, messages=None, **kwargs):
+        outputs = super().__call__(prompt=prompt, messages=messages, **kwargs)
+        # DSPy stores the exact outputs list in its history entry.  Identity
+        # matching remains correct when several threads share one LM.
+        entry = next(
+            (
+                item
+                for item in reversed(self.history)
+                if item.get("outputs") is outputs
+            ),
+            None,
+        )
+        if entry is not None:
+            record_provider_usage(entry.get("usage", {}))
+        return outputs
 
 
 class ModelSettings(BaseModel):
@@ -290,7 +311,7 @@ class ModelSettings(BaseModel):
                 params["min_p"] = self.min_p
 
         try:
-            llm = dspy.LM(**params)
+            llm = TokenTrackingLM(**params)
             logger.info(
                 f"Success to create model configure: {self.model_name} ({self.model_type})"
             )
