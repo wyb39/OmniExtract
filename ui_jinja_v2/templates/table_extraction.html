@@ -1,0 +1,661 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="page-hero">
+  <div class="hero-icon rose"><i class="fas fa-table"></i></div>
+  <div>
+    <h2>Table Extraction</h2>
+    <p class="hero-desc">Classify tables and extract structured records from <strong>Excel / CSV / TSV files</strong> —
+      or from tables parsed out of PDF / XML documents. Upload a ZIP of files, define the fields to extract,
+      and the results are returned as a downloadable package.</p>
+  </div>
+</div>
+
+<form id="table-extraction-combined-form" class="module-container">
+
+  <!-- Step 1: Basics -->
+  <div class="section-container">
+    <div class="section-head">
+      <div class="step-num">1</div>
+      <div>
+        <div class="section-title">Task Basics</div>
+        <div class="section-desc">Name this run so you can recognize it later, and optionally leave an email to be notified.</div>
+      </div>
+    </div>
+    <div class="field-grid">
+      <div class="form-group">
+        <label class="form-label" for="task-name">Task Name <span class="req-badge">Required</span></label>
+        <input id="task-name" class="form-input" placeholder="Enter a name for this task" />
+        <small class="form-hint"><i class="fas fa-circle-info"></i>A descriptive name for this table extraction task.</small>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="table-contact-email">Contact Email <span class="opt-badge">Optional</span></label>
+        <input id="table-contact-email" name="contact_email" class="form-input email-input" type="email" placeholder="Enter your email address" />
+        <small class="form-hint"><i class="fas fa-circle-info"></i>Leave blank to use the workflow status link only.</small>
+        <div class="email-error" style="display:none;color:#dc2626;font-size:13px;margin-top:4px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 2: Table files -->
+  <div class="section-container">
+    <div class="section-head">
+      <div class="step-num">2</div>
+      <div>
+        <div class="section-title">Table Files</div>
+        <div class="section-desc">Upload the files containing your tables. Excel / CSV / TSV files are read directly; PDF / XML files are parsed first (see note below).</div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="tp-file-type">Non-tabular File Type</label>
+      <select id="tp-file-type" class="form-select">
+        <option value="PDF">PDF</option>
+        <option value="scienceDirect">ScienceDirect</option>
+        <option value="PMC">PMC</option>
+      </select>
+      <div class="callout callout-warn" style="margin-top:12px;margin-bottom:0;">
+        <i class="fas fa-triangle-exclamation"></i>
+        <div>
+          <strong>This configuration is used to parse tables from non-tabular files (such as PDF files of the main text of literature). Please note that due to the limitations of parsing tools, the parsing results may contain errors, so this method is not recommended for non-tabular file parsing.</strong>
+          <p style="margin-top:8px;font-weight:700;">File Type Descriptions:</p>
+          <ul>
+            <li>PDF: Standard PDF files containing tables</li>
+            <li>ScienceDirect: ScienceDirect formatted XML files</li>
+            <li>PMC: PubMed Central formatted XML files</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="source-zip">Upload Zip File <span class="req-badge">Required</span></label>
+      <div class="file-upload-wrapper">
+        <input type="file" id="source-zip" name="source_zip" class="file-upload-input" accept=".zip" />
+        <div class="file-upload-box">
+          <i class="fas fa-cloud-upload-alt file-upload-icon"></i>
+          <p class="file-upload-text">Click to upload or drag and drop</p>
+          <p class="file-upload-hint">ZIP file only (Max 30 files, types: csv, tsv, xls, xlsx, pdf, xml)</p>
+          <div id="file-name-display" style="display:none; margin-top: 10px; font-weight: 600; color: #334155;"></div>
+        </div>
+      </div>
+      <div id="validation-result" style="margin-top: 15px; color: #666; font-size: 14px; text-align: center;"></div>
+    </div>
+  </div>
+
+  <!-- Step 3: Output schema -->
+  <div class="section-container">
+    <div class="section-head">
+      <div class="step-num">3</div>
+      <div>
+        <div class="section-title">Output Fields Configuration</div>
+        <div class="section-desc">Define the columns of the result table — each Output Field becomes a column in the extracted data.</div>
+      </div>
+    </div>
+
+    <button id="et-add-output-field" type="button" class="btn btn-ghost btn-sm" style="margin-bottom:15px;"><i class="fas fa-plus"></i>Add OutputField</button>
+
+    <div id="et-output-fields-container">
+      <!-- Template for Output Field -->
+      <div id="et-output-field-initial" class="field-block">
+        <div class="field-block-head">
+          <span class="field-block-title"><i class="fas fa-arrow-up-from-bracket"></i>Output Field</span>
+          <button id="et-delete-output-field" type="button" class="delete-button" title="Remove this field">×</button>
+        </div>
+        <div class="field-grid">
+          <div class="form-group">
+            <label class="form-label" for="et-output-name">Output Field Name</label>
+            <input id="et-output-name" class="form-input" placeholder="output_field" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="et-output-type">Output Field Type</label>
+            <select id="et-output-type" class="form-select">
+              <option value="str">String</option>
+              <option value="int">Integer</option>
+              <option value="float">Float</option>
+              <option value="bool">Boolean</option>
+              <option value="list">List</option>
+              <option value="literal">Literal</option>
+              <option value="list_literal">List Literal</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="et-output-description">Output Field Description</label>
+          <input id="et-output-description" class="form-input" placeholder="Description of what to extract" />
+        </div>
+        <div class="field-grid">
+          <div>
+            <label class="form-checkbox"><input type="checkbox" id="et-output-add-range" /> Add Range Limits</label>
+          </div>
+          <div>
+            <label class="form-checkbox"><input type="checkbox" id="et-output-add-literal" /> Add Literal List</label>
+          </div>
+        </div>
+        <div id="et-output-range-container" style="display:none;">
+          <div class="field-grid" style="margin-top:12px;">
+            <div class="form-group">
+              <label class="form-label" for="et-output-range-min">Range Minimum</label>
+              <input id="et-output-range-min" class="form-input" type="number" placeholder="Min value" />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="et-output-range-max">Range Maximum</label>
+              <input id="et-output-range-max" class="form-input" type="number" placeholder="Max value" />
+            </div>
+          </div>
+        </div>
+        <div id="et-output-literal-container" style="display:none;">
+          <div class="form-group" style="margin-top:12px;">
+            <label class="form-label" for="et-output-literal-list">Literal List (comma separated)</label>
+            <input id="et-output-literal-list" class="form-input" placeholder="option1,option2,option3" />
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 4: Prompts -->
+  <div class="section-container">
+    <div class="section-head">
+      <div class="step-num">4</div>
+      <div>
+        <div class="section-title">Prompt Configuration</div>
+        <div class="section-desc">Two prompts drive the pipeline: the first decides whether a table is relevant, the second extracts the data.</div>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="et-classify-prompt">Classification Prompt</label>
+      <textarea id="et-classify-prompt" class="form-textarea" style="height:80px;" placeholder="Please classify the table content">Please classify the table content</textarea>
+      <small class="form-hint"><i class="fas fa-circle-info"></i>Prompt for table classification — decides which tables contain the target data.</small>
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="et-extract-prompt">Extraction Prompt</label>
+      <textarea id="et-extract-prompt" class="form-textarea" style="height:80px;" placeholder="Please extract the data according to the specified fields">Please extract the data according to the specified fields</textarea>
+      <small class="form-hint"><i class="fas fa-circle-info"></i>Prompt for data extraction — applied together with your Output Fields.</small>
+    </div>
+  </div>
+
+  <div class="form-actions">
+    <button id="start-table-extraction" type="button" class="btn btn-primary"><i class="fas fa-play"></i>Start Table Extraction</button>
+    <button id="btn-export-config" type="button" class="btn btn-success"><i class="fas fa-file-export"></i>Export Config</button>
+    <button id="btn-load-config" type="button" class="btn btn-secondary"><i class="fas fa-folder-open"></i>Load Config</button>
+    <input type="file" id="file-load-config" style="display: none;" accept=".json">
+    <p class="form-hint" style="width:100%;margin-top:4px;"><i class="fas fa-lightbulb"></i>
+      After starting, you will get a <strong>workflow status page</strong> link — it refreshes automatically and provides the result download when finished.
+    </p>
+    <div id="results-display" style="width:100%;margin-top:8px"></div>
+  </div>
+</form>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+document.getElementById('source-zip').addEventListener('change', function(event) {
+  var file = event.target.files[0];
+  var fileNameDisplay = document.getElementById('file-name-display');
+  var resultDiv = document.getElementById('validation-result');
+
+  if (!file) {
+      fileNameDisplay.style.display = 'none';
+      return;
+  }
+
+  // Display selected file name
+  fileNameDisplay.textContent = file.name;
+  fileNameDisplay.style.display = 'block';
+
+  resultDiv.innerHTML = 'Validating... <i class="fas fa-spinner fa-spin"></i>';
+
+  JSZip.loadAsync(file).then(function(zip) {
+    var fileCount = 0;
+    var validFileCount = 0;
+    var invalidFiles = [];
+    var allowedExtensions = ['.csv', '.tsv', '.xls', '.xlsx', '.pdf', '.xml'];
+
+    zip.forEach(function (relativePath, zipEntry) {
+      // Ignore directories and hidden files (starting with . or __MACOSX)
+      if (!zipEntry.dir && !relativePath.startsWith('__MACOSX') && !relativePath.split('/').pop().startsWith('.')) {
+        fileCount++;
+        var lowerPath = relativePath.toLowerCase();
+        var isAllowed = allowedExtensions.some(ext => lowerPath.endsWith(ext));
+
+        if (isAllowed) {
+            validFileCount++;
+        } else {
+            invalidFiles.push(relativePath);
+        }
+      }
+    });
+
+    var errors = [];
+    if (validFileCount === 0) {
+        errors.push("No valid files found (csv, tsv, xls, xlsx, pdf, xml).");
+    }
+    if (invalidFiles.length > 0) {
+        errors.push("Contains invalid files (" + invalidFiles.length + "): " + invalidFiles.slice(0, 3).join(", ") + (invalidFiles.length > 3 ? "..." : ""));
+    }
+    if (fileCount > 30) {
+        errors.push("Too many files (" + fileCount + "). Max allowed is 30.");
+    }
+
+    if (errors.length === 0) {
+      resultDiv.innerHTML = '<div style="color: #059669; background-color: #d1fae5; padding: 10px; border-radius: 6px; display: inline-block;">' +
+                            '<i class="fas fa-check-circle"></i> Validation Passed! Ready for upload.<br>' +
+                            '<small style="color: #047857;">Total files: ' + fileCount + '</small></div>';
+    } else {
+      // Clear the file input if validation fails so it won't be uploaded
+      event.target.value = '';
+      fileNameDisplay.style.display = 'none';
+      resultDiv.innerHTML = '<div style="color: #dc2626; background-color: #fee2e2; padding: 10px; border-radius: 6px; display: inline-block;">' +
+                            '<i class="fas fa-times-circle"></i> Validation Failed!<br>' +
+                            '<small>' + errors.join("<br>") + '</small></div>';
+    }
+
+  }, function (e) {
+    event.target.value = '';
+    fileNameDisplay.style.display = 'none';
+    resultDiv.innerHTML = '<div style="color: #dc2626; background-color: #fee2e2; padding: 10px; border-radius: 6px; display: inline-block;">' +
+                          'Error reading zip file: ' + e.message + '</div>';
+  });
+});
+
+// Drag and drop visual feedback
+var uploadWrapper = document.querySelector('.file-upload-wrapper');
+var uploadInput = document.querySelector('.file-upload-input');
+
+if (uploadWrapper && uploadInput) {
+    ['dragenter', 'dragover'].forEach(eventName => {
+      uploadInput.addEventListener(eventName, function() {
+        uploadWrapper.classList.add('drag-over');
+      }, false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+      uploadInput.addEventListener(eventName, function() {
+        uploadWrapper.classList.remove('drag-over');
+      }, false);
+    });
+}
+</script>
+
+<script>
+// Dynamic Fields Logic for Extraction From Tables
+(function(){
+document.currentScript && (document.currentScript.defer = true);
+function init(){
+  var outputIndex = 1;
+  var outputContainer = document.getElementById('et-output-fields-container');
+  var addOutputBtn = document.getElementById('et-add-output-field');
+  var outputTemplateNode = document.getElementById('et-output-field-initial').cloneNode(true);
+
+  function createClone(index) {
+    var clone = outputTemplateNode.cloneNode(true);
+    clone.id = 'et-output-field-' + index;
+    var idMap = {};
+
+    clone.querySelectorAll('[id]').forEach(function(el) {
+      var oldId = el.id;
+      var newId = oldId + '-' + index;
+      idMap[oldId] = newId;
+      el.id = newId;
+
+      if (el.tagName === 'INPUT') {
+        if (el.type === 'checkbox') {
+          el.checked = false;
+        } else {
+          el.value = '';
+        }
+      } else if (el.tagName === 'TEXTAREA') {
+        el.value = '';
+      }
+    });
+
+    clone.querySelectorAll('label[for]').forEach(function(label) {
+      var oldFor = label.getAttribute('for');
+      if (idMap[oldFor]) {
+        label.setAttribute('for', idMap[oldFor]);
+      }
+    });
+
+    var rangeContainer = clone.querySelector('[id^="et-output-range-container"]');
+    var literalContainer = clone.querySelector('[id^="et-output-literal-container"]');
+    if (rangeContainer) rangeContainer.style.display = 'none';
+    if (literalContainer) literalContainer.style.display = 'none';
+
+    return clone;
+  }
+
+  function handleDelete(e) {
+    var btn = e.target.closest('.delete-button');
+    if (!btn) return;
+
+    var block = btn.closest('[id^="et-output-field"]');
+    if (block) block.remove();
+  }
+
+  function handleToggle(e) {
+    var target = e.target;
+    if (!target || target.type !== 'checkbox') return;
+
+    var block = target.closest('[id^="et-output-field"]');
+    if (!block) return;
+
+    var isRange = target.id.indexOf('et-output-add-range') === 0;
+    var isLiteral = target.id.indexOf('et-output-add-literal') === 0;
+
+    if (isRange) {
+      var r = block.querySelector('[id^="et-output-range-container"]');
+      if (r) r.style.display = target.checked ? 'block' : 'none';
+    }
+
+    if (isLiteral) {
+      var l = block.querySelector('[id^="et-output-literal-container"]');
+      if (l) l.style.display = target.checked ? 'block' : 'none';
+    }
+  }
+
+  if (addOutputBtn) {
+    addOutputBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      var block = createClone(outputIndex++);
+      outputContainer.appendChild(block);
+    });
+  }
+
+  outputContainer.addEventListener('click', function(e) { handleDelete(e); });
+  outputContainer.addEventListener('change', function(e) { handleToggle(e); });
+}
+if (document.readyState === 'loading'){
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}
+})();
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Export Configuration
+    document.getElementById('btn-export-config').addEventListener('click', function(e) {
+        e.preventDefault();
+
+        const config = {
+            taskName: document.getElementById('task-name').value,
+            contactEmail: document.getElementById('table-contact-email').value.trim(),
+            fileType: document.getElementById('tp-file-type').value,
+            classifyPrompt: document.getElementById('et-classify-prompt').value,
+            extractPrompt: document.getElementById('et-extract-prompt').value,
+            threads: '6',
+            outputFields: []
+        };
+
+        // Helper to extract field data
+        function extractFieldData(container) {
+            const name = container.querySelector('[id^="et-output-name"]').value;
+            const type = container.querySelector('[id^="et-output-type"]').value;
+            const desc = container.querySelector('[id^="et-output-description"]').value;
+
+            const rangeCheckbox = container.querySelector('[id^="et-output-add-range"]');
+            const literalCheckbox = container.querySelector('[id^="et-output-add-literal"]');
+
+            const fieldData = {
+                name: name,
+                type: type,
+                description: desc,
+                hasRange: rangeCheckbox.checked,
+                hasLiteral: literalCheckbox.checked
+            };
+
+            if (rangeCheckbox.checked) {
+                fieldData.rangeMin = container.querySelector('[id^="et-output-range-min"]').value;
+                fieldData.rangeMax = container.querySelector('[id^="et-output-range-max"]').value;
+            }
+
+            if (literalCheckbox.checked) {
+                fieldData.literalList = container.querySelector('[id^="et-output-literal-list"]').value;
+            }
+
+            return fieldData;
+        }
+
+        // Output Fields
+        const outputContainers = document.getElementById('et-output-fields-container').children;
+        for (let i = 0; i < outputContainers.length; i++) {
+            config.outputFields.push(extractFieldData(outputContainers[i]));
+        }
+
+        // Download JSON
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(config, null, 2));
+        const downloadAnchorNode = document.createElement('a');
+        downloadAnchorNode.setAttribute("href", dataStr);
+        downloadAnchorNode.setAttribute("download", (config.taskName || "config") + ".json");
+        document.body.appendChild(downloadAnchorNode); // required for firefox
+        downloadAnchorNode.click();
+        downloadAnchorNode.remove();
+    });
+
+    // Load Configuration
+    document.getElementById('btn-load-config').addEventListener('click', function(e) {
+        e.preventDefault();
+        document.getElementById('file-load-config').click();
+    });
+
+    document.getElementById('file-load-config').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            try {
+                const config = JSON.parse(event.target.result);
+
+                // Static fields
+                document.getElementById('task-name').value = config.taskName || '';
+                document.getElementById('table-contact-email').value = config.contactEmail || '';
+                document.getElementById('tp-file-type').value = config.fileType || 'PDF';
+                document.getElementById('et-classify-prompt').value = config.classifyPrompt || '';
+                document.getElementById('et-extract-prompt').value = config.extractPrompt || '';
+
+                // Helper to populate field
+                function populateField(container, data) {
+                    container.querySelector('[id^="et-output-name"]').value = data.name || '';
+                    container.querySelector('[id^="et-output-type"]').value = data.type || 'str';
+                    container.querySelector('[id^="et-output-description"]').value = data.description || '';
+
+                    const rangeCheckbox = container.querySelector('[id^="et-output-add-range"]');
+                    rangeCheckbox.checked = data.hasRange || false;
+                    // Trigger change to update visibility
+                    rangeCheckbox.dispatchEvent(new Event('change', { bubbles: true }));
+
+                    if (data.hasRange) {
+                        container.querySelector('[id^="et-output-range-min"]').value = data.rangeMin || '';
+                        container.querySelector('[id^="et-output-range-max"]').value = data.rangeMax || '';
+                    }
+
+                    const literalCheckbox = container.querySelector('[id^="et-output-add-literal"]');
+                    literalCheckbox.checked = data.hasLiteral || false;
+                    // Trigger change to update visibility
+                    literalCheckbox.dispatchEvent(new Event('change', { bubbles: true }));
+
+                    if (data.hasLiteral) {
+                        container.querySelector('[id^="et-output-literal-list"]').value = data.literalList || '';
+                    }
+                }
+
+                // Reset and Populate Output Fields
+                const outputContainer = document.getElementById('et-output-fields-container');
+                // Remove all fields
+                while (outputContainer.firstChild) {
+                    outputContainer.removeChild(outputContainer.firstChild);
+                }
+
+                if (config.outputFields && config.outputFields.length > 0) {
+                    config.outputFields.forEach((fieldData) => {
+                        document.getElementById('et-add-output-field').click();
+                        const container = outputContainer.lastElementChild;
+                        populateField(container, fieldData);
+                    });
+                } else {
+                    // If no fields in config, add one empty default field
+                    document.getElementById('et-add-output-field').click();
+                }
+
+                // Reset file input
+                e.target.value = '';
+
+            } catch (error) {
+                console.error('Error parsing config file:', error);
+                alert('Error loading configuration file. Please check the file format.');
+            }
+        };
+        reader.readAsText(file);
+    });
+
+    // Start Table Extraction
+    document.getElementById('start-table-extraction').addEventListener('click', function(e) {
+        e.preventDefault();
+
+        const startBtn = this;
+        const resultsDisplay = document.getElementById('results-display');
+        const fileInput = document.getElementById('source-zip');
+
+        if (typeof validateEmailInputById === 'function') {
+            var emailValid = validateEmailInputById('table-contact-email');
+            if (!emailValid) {
+                return;
+            }
+        }
+
+        // Basic Validation
+        if (!fileInput.files.length) {
+            alert('Please upload a zip file first.');
+            return;
+        }
+
+        const taskName = document.getElementById('task-name').value;
+        if (!taskName) {
+            alert('Please enter a task name.');
+            return;
+        }
+
+        // Disable button
+        startBtn.disabled = true;
+        startBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Starting...';
+        resultsDisplay.innerHTML = '';
+
+        // Prepare Config
+        const config = {
+            taskName: taskName,
+            contactEmail: document.getElementById('table-contact-email').value.trim(),
+            fileType: document.getElementById('tp-file-type').value,
+            classifyPrompt: document.getElementById('et-classify-prompt').value,
+            extractPrompt: document.getElementById('et-extract-prompt').value,
+            threads: '6',
+            outputFields: []
+        };
+
+        // Helper to extract field data
+        function extractFieldData(container) {
+            const name = container.querySelector('[id^="et-output-name"]').value.trim();
+            const type = container.querySelector('[id^="et-output-type"]').value;
+            const desc = container.querySelector('[id^="et-output-description"]').value.trim();
+
+            const rangeCheckbox = container.querySelector('[id^="et-output-add-range"]');
+            const literalCheckbox = container.querySelector('[id^="et-output-add-literal"]');
+
+            const fieldData = {
+                name: name,
+                type: type,
+                description: desc,
+                hasRange: rangeCheckbox.checked,
+                hasLiteral: literalCheckbox.checked
+            };
+
+            if (rangeCheckbox.checked) {
+                fieldData.rangeMin = container.querySelector('[id^="et-output-range-min"]').value;
+                fieldData.rangeMax = container.querySelector('[id^="et-output-range-max"]').value;
+            }
+
+            if (literalCheckbox.checked) {
+                fieldData.literalList = container.querySelector('[id^="et-output-literal-list"]').value;
+            }
+
+            return fieldData;
+        }
+
+        const outputContainers = document.getElementById('et-output-fields-container').children;
+        for (let i = 0; i < outputContainers.length; i++) {
+            config.outputFields.push(extractFieldData(outputContainers[i]));
+        }
+
+        const hasEmptyOutputName = config.outputFields.some(function(field) { return !field.name; });
+        if (hasEmptyOutputName) {
+            alert('Field name cannot be empty. Please fill in all field names.');
+            startBtn.disabled = false;
+            startBtn.innerHTML = 'Start Table Extraction';
+            return;
+        }
+
+        // Prepare FormData
+        const formData = new FormData();
+        formData.append('source_zip', fileInput.files[0]);
+        formData.append('config', JSON.stringify(config));
+
+        // Send Request
+        fetch('/omniextract/api/run_workflow_table_extraction', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => {
+            if (response.status === 429) {
+                throw new Error('LIMIT_EXCEEDED');
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.status_code === 200) {
+                resultsDisplay.innerHTML = `
+                    <div class="alert alert-success">
+                        <i class="fas fa-check-circle"></i>
+                        <div>
+                            <h4>Workflow Started Successfully!</h4>
+                            <p style="margin-bottom:6px;">Workflow ID: <strong>${data.workflow_id}</strong></p>
+                            <p><a href="${omniWorkflowUrl(data.workflow_url)}" target="_blank" rel="noopener">Open the workflow status page</a>. It refreshes automatically every 5 minutes.</p>
+                        </div>
+                    </div>
+                `;
+            } else {
+                throw new Error(data.detail || 'Unknown error occurred');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            if (error.message === 'LIMIT_EXCEEDED') {
+                resultsDisplay.innerHTML = `
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <div>
+                            <h4>Limit Exceeded</h4>
+                            <p>今天服务处理次数已超过上线，请用户明天再使用或安装本地版本使用</p>
+                        </div>
+                    </div>
+                `;
+            } else {
+                resultsDisplay.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <div>
+                            <h4>Error Starting Task</h4>
+                            <p>${error.message}</p>
+                        </div>
+                    </div>
+                `;
+            }
+        })
+        .finally(() => {
+            startBtn.disabled = false;
+            startBtn.innerHTML = 'Start Table Extraction';
+        });
+    });
+});
+</script>
+{% endblock %}

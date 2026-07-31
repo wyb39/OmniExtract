@@ -1,0 +1,867 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="page-hero">
+  <div class="hero-icon amber"><i class="fas fa-bolt"></i></div>
+  <div>
+    <h2>Prompt Optimization</h2>
+    <p class="hero-desc">Automatically improve your extraction prompt against a <strong>curated ground-truth dataset</strong>.
+      The module runs DSPy optimization and produces an <strong>optimized configuration package</strong>
+      (<code>optim_settings.json</code> + <code>optim_prompt.json</code>) that you can then use in
+      <strong>Document Extraction · Optimized</strong> for higher-quality extraction.</p>
+  </div>
+</div>
+
+<form id="prompt-optimization-form" class="module-container">
+
+  <!-- Step 1: Basics -->
+  <div class="section-container">
+    <div class="section-head">
+      <div class="step-num">1</div>
+      <div>
+        <div class="section-title">Task Basics</div>
+        <div class="section-desc">Name this run so you can recognize it later, and optionally leave an email to be notified.</div>
+      </div>
+    </div>
+    <div class="field-grid">
+      <div class="form-group">
+        <label class="form-label" for="po-task-name">Task Name <span class="req-badge">Required</span></label>
+        <input id="po-task-name" class="form-input" placeholder="Enter a name for this task" />
+        <small class="form-hint"><i class="fas fa-circle-info"></i>Provide a descriptive name for this prompt optimization task.</small>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="po-contact-email">Contact Email <span class="opt-badge">Optional</span></label>
+        <input id="po-contact-email" name="contact_email" class="form-input email-input" type="email" placeholder="Enter your email address" />
+        <small class="form-hint"><i class="fas fa-circle-info"></i>Leave blank to use the workflow status link only.</small>
+        <div class="email-error" style="display:none;color:#dc2626;font-size:13px;margin-top:4px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 2: Files & dataset -->
+  <div class="section-container">
+    <div class="section-head">
+      <div class="step-num">2</div>
+      <div>
+        <div class="section-title">Files &amp; Curated Dataset</div>
+        <div class="section-desc">Upload the source documents plus the curated dataset that the prompt is optimized against.</div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="po-file-type">File Type <span class="req-badge">Required</span></label>
+      <select id="po-file-type" class="form-select">
+        <option value="PDF">PDF</option>
+        <option value="scienceDirect">ScienceDirect</option>
+        <option value="PMC">PMC</option>
+      </select>
+      <small class="form-hint"><i class="fas fa-circle-info"></i>PDF for standard papers; ScienceDirect / PMC for the corresponding XML full-text formats.</small>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="source-zip">Upload Zip File <span class="req-badge">Required</span></label>
+      <div class="file-upload-wrapper">
+        <input type="file" id="source-zip" name="source_zip" class="file-upload-input" accept=".zip" />
+        <div class="file-upload-box">
+          <i class="fas fa-cloud-upload-alt file-upload-icon"></i>
+          <p class="file-upload-text">Click to upload or drag and drop</p>
+          <p class="file-upload-hint">ZIP file only (containing PDF/XML files)</p>
+          <div id="file-name-display" style="display:none; margin-top: 10px; font-weight: 600; color: #334155;"></div>
+        </div>
+      </div>
+      <div id="validation-result" style="margin-top: 15px; color: #666; font-size: 14px; text-align: center;"></div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="dataset-file">Upload Dataset (JSON/CSV/TSV/Excel) <span class="req-badge">Required</span></label>
+      <div class="file-upload-wrapper" id="dataset-upload-wrapper">
+        <input type="file" id="dataset-file" name="dataset_file" class="file-upload-input" accept=".json,.csv,.tsv,.xlsx,.xls" />
+        <div class="file-upload-box">
+          <i class="fas fa-database file-upload-icon"></i>
+          <p class="file-upload-text">Click to upload or drag and drop</p>
+          <p class="file-upload-hint">Supported formats: JSON, CSV, TSV, Excel — curated ground truth used to score and improve the prompt</p>
+          <div id="dataset-name-display" style="display:none; margin-top: 10px; font-weight: 600; color: #334155;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 3: Extraction schema -->
+  <div class="section-container">
+    <div class="section-head">
+      <div class="step-num">3</div>
+      <div>
+        <div class="section-title">Extraction Schema</div>
+        <div class="section-desc">Define which document parts are fed to the model (Input Fields) and which data it must return (Output Fields). The schema must match your curated dataset.</div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="po-convert-mode">Conversion Mode <span class="req-badge">Required</span></label>
+      <select id="po-convert-mode" class="form-select">
+        <option value="byPart">By Part (divide document by article parts)</option>
+        <option value="wholeDoc">Whole Document (convert entire document as one)</option>
+      </select>
+      <small class="form-hint"><i class="fas fa-circle-info"></i>How each document is split before extraction. This determines the allowed Input Field names below.</small>
+    </div>
+
+    <div class="callout callout-info">
+      <i class="fas fa-circle-info"></i>
+      <div>
+        <strong>Please adjust InputField according to the selected Conversion Mode:</strong>
+        <ul>
+          <li><strong>By Part Mode:</strong> Input Field names must be one of: <code>Introduction</code>, <code>Method</code>, <code>Result</code>, <code>Discussion</code>, <code>Conclusion</code>.</li>
+          <li><strong>Whole Document Mode:</strong> Only one Input Field is allowed, and its name must be <code>Document</code>.</li>
+        </ul>
+      </div>
+    </div>
+
+    <h4 style="font-size:.95rem;font-weight:700;margin:18px 0 4px;color:var(--ink-700);"><i class="fas fa-arrow-right-to-bracket" style="color:var(--primary);margin-right:6px;"></i>Input Fields</h4>
+    <p class="form-hint" style="margin-bottom:12px;">The document content given to the model, e.g. the <code>Method</code> section.</p>
+    <button id="po-add-input-field" class="btn btn-ghost btn-sm" style="margin-bottom:15px;"><i class="fas fa-plus"></i>Add InputField</button>
+    <div id="po-input-fields-container">
+      <div id="po-input-field-initial" class="field-block">
+        <div class="field-block-head">
+          <span class="field-block-title"><i class="fas fa-arrow-right-to-bracket"></i>Input Field</span>
+          <button id="po-delete-input-field" class="delete-button" title="Remove this field">×</button>
+        </div>
+        <div class="field-grid">
+          <div class="form-group">
+            <label class="form-label" for="po-input-name">Input Field Name</label>
+            <input id="po-input-name" class="form-input" placeholder="Method" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="po-input-type">Input Field Type</label>
+            <select id="po-input-type" class="form-select">
+              <option value="str">String</option>
+              <option value="int">Integer</option>
+              <option value="float">Float</option>
+              <option value="bool">Boolean</option>
+              <option value="list">List</option>
+              <option value="literal">Literal</option>
+              <option value="list_literal">List Literal</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="po-input-description">Input Field Description</label>
+          <input id="po-input-description" class="form-input" placeholder="Describe what this input field represents (e.g., 'The method section of a research paper')" />
+        </div>
+        <div class="field-grid">
+          <div>
+            <label class="form-checkbox"><input type="checkbox" id="po-input-add-range" /> Add Range Limits</label>
+          </div>
+          <div>
+            <label class="form-checkbox"><input type="checkbox" id="po-input-add-literal" /> Add Literal List</label>
+          </div>
+        </div>
+        <div id="po-input-range-container" style="display:none">
+          <div class="field-grid" style="margin-top:12px;">
+            <div class="form-group">
+              <label class="form-label" for="po-input-range-min">Range Minimum</label>
+              <input id="po-input-range-min" class="form-input" type="number" placeholder="Min value" />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="po-input-range-max">Range Maximum</label>
+              <input id="po-input-range-max" class="form-input" type="number" placeholder="Max value" />
+            </div>
+          </div>
+        </div>
+        <div id="po-input-literal-container" style="display:none">
+          <div class="form-group" style="margin-top:12px;">
+            <label class="form-label" for="po-input-literal-list">Literal List (comma separated)</label>
+            <input id="po-input-literal-list" class="form-input" placeholder="option1,option2,option3" />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <h4 style="font-size:.95rem;font-weight:700;margin:24px 0 4px;color:var(--ink-700);"><i class="fas fa-arrow-up-from-bracket" style="color:var(--success);margin-right:6px;"></i>Output Fields</h4>
+    <p class="form-hint" style="margin-bottom:12px;">The data you want the model to extract — these should correspond to the columns of your curated dataset.</p>
+    <button id="po-add-output-field" class="btn btn-ghost btn-sm" style="margin-bottom:15px;"><i class="fas fa-plus"></i>Add OutputField</button>
+    <div id="po-output-fields-container">
+      <div id="po-output-field-initial" class="field-block">
+        <div class="field-block-head">
+          <span class="field-block-title"><i class="fas fa-arrow-up-from-bracket"></i>Output Field</span>
+          <button id="po-delete-output-field" class="delete-button" title="Remove this field">×</button>
+        </div>
+        <div class="field-grid">
+          <div class="form-group">
+            <label class="form-label" for="po-output-name">Output Field Name</label>
+            <input id="po-output-name" class="form-input" placeholder="output_field" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="po-output-type">Output Field Type</label>
+            <select id="po-output-type" class="form-select">
+              <option value="str">String</option>
+              <option value="int">Integer</option>
+              <option value="float">Float</option>
+              <option value="bool">Boolean</option>
+              <option value="list">List</option>
+              <option value="literal">Literal</option>
+              <option value="list_literal">List Literal</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="po-output-description">Output Field Description</label>
+          <input id="po-output-description" class="form-input" placeholder="Description of what to extract" />
+        </div>
+        <div class="field-grid">
+          <div>
+            <label class="form-checkbox"><input type="checkbox" id="po-output-add-range" /> Add Range Limits</label>
+          </div>
+          <div>
+            <label class="form-checkbox"><input type="checkbox" id="po-output-add-literal" /> Add Literal List</label>
+          </div>
+        </div>
+        <div id="po-output-range-container" style="display:none">
+          <div class="field-grid" style="margin-top:12px;">
+            <div class="form-group">
+              <label class="form-label" for="po-output-range-min">Range Minimum</label>
+              <input id="po-output-range-min" class="form-input" type="number" placeholder="Min value" />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="po-output-range-max">Range Maximum</label>
+              <input id="po-output-range-max" class="form-input" type="number" placeholder="Max value" />
+            </div>
+          </div>
+        </div>
+        <div id="po-output-literal-container" style="display:none">
+          <div class="form-group" style="margin-top:12px;">
+            <label class="form-label" for="po-output-literal-list">Literal List (comma separated)</label>
+            <input id="po-output-literal-list" class="form-input" placeholder="option1,option2,option3" />
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 4: Prompt & optimization settings -->
+  <div class="section-container">
+    <div class="section-head">
+      <div class="step-num">4</div>
+      <div>
+        <div class="section-title">Prompt &amp; Optimization Settings</div>
+        <div class="section-desc">Provide a starting prompt to improve, and tune the optimization run.</div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="po-initial-prompt">Initial Prompt</label>
+      <textarea id="po-initial-prompt" class="form-textarea" style="height:120px" placeholder="(Refer to the example below for the required prompt format)
+    Extract clinical information for patient and healthy control groups from biomedical literature.
+    Follow these rules:
+    1) Preserve full group names exactly as reported.
+    2) When extracting age, report values in years (convert units to years when necessary).
+    3) When calculating sex percentages, report values rounded to two decimal places.
+    4) Keep all extracted values precise and cite the source sentence or table."></textarea>
+      <small class="form-hint"><i class="fas fa-circle-info"></i>The starting instruction. The optimizer rewrites it to score better against your dataset.</small>
+    </div>
+
+    <div class="field-grid">
+      <div class="form-group">
+        <label class="form-label" for="po-demos">Demos</label>
+        <input id="po-demos" class="form-input" type="number" placeholder="1" value="1" />
+        <small class="form-hint"><i class="fas fa-circle-info"></i>Number of few-shot demonstrations the optimizer may add to the prompt.</small>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="po-article-field">Article Field Name</label>
+        <input id="po-article-field" class="form-input" placeholder="article_field" value="article_field" />
+        <small class="form-hint"><i class="fas fa-circle-info"></i>Field name for the article file name to extract.</small>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Multiple Entities</label>
+      <label class="form-checkbox"><input type="checkbox" id="po-multiple" /> Set true for extracting multiple entities from the document</label>
+    </div>
+  </div>
+
+  <!-- Action Buttons -->
+  <div class="form-actions">
+    <button id="po-run-optimization" class="btn btn-primary"><i class="fas fa-play"></i>Run Optimization</button>
+    <button id="btn-export-config" class="btn btn-success"><i class="fas fa-file-export"></i>Export Config</button>
+    <button id="btn-load-config" class="btn btn-secondary"><i class="fas fa-folder-open"></i>Load Config</button>
+    <input type="file" id="file-load-config" style="display: none;" accept=".json">
+    <p class="form-hint" style="width:100%;margin-top:4px;"><i class="fas fa-lightbulb"></i>
+      Optimization runs in the background and may take a while. When finished, download the
+      <strong>optimized configuration package</strong> from the workflow status page and use it in
+      <strong>Document Extraction · Optimized</strong>.
+    </p>
+  </div>
+
+  <div id="po-optimization-results" style="padding:0 28px;"></div>
+
+</form>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+document.getElementById('source-zip').addEventListener('change', function(event) {
+  var file = event.target.files[0];
+  var fileNameDisplay = document.getElementById('file-name-display');
+  var resultDiv = document.getElementById('validation-result');
+
+  if (!file) {
+      fileNameDisplay.style.display = 'none';
+      return;
+  }
+
+  // Display selected file name
+  fileNameDisplay.textContent = file.name;
+  fileNameDisplay.style.display = 'block';
+
+  resultDiv.innerHTML = 'Validating... <i class="fas fa-spinner fa-spin"></i>';
+
+  JSZip.loadAsync(file).then(function(zip) {
+    var fileCount = 0;
+    var validFileCount = 0;
+    var invalidFiles = [];
+
+    zip.forEach(function (relativePath, zipEntry) {
+      // Ignore directories and hidden files (starting with . or __MACOSX)
+      if (!zipEntry.dir && !relativePath.startsWith('__MACOSX') && !relativePath.split('/').pop().startsWith('.')) {
+        fileCount++;
+        var lowerPath = relativePath.toLowerCase();
+        if (lowerPath.endsWith('.pdf') || lowerPath.endsWith('.xml')) {
+            validFileCount++;
+        } else {
+            invalidFiles.push(relativePath);
+        }
+      }
+    });
+
+    var errors = [];
+    if (validFileCount === 0) {
+        errors.push("No PDF or XML files found.");
+    }
+    if (invalidFiles.length > 0) {
+        errors.push("Contains invalid files (" + invalidFiles.length + "): " + invalidFiles.slice(0, 3).join(", ") + (invalidFiles.length > 3 ? "..." : ""));
+    }
+
+    if (errors.length === 0) {
+      resultDiv.innerHTML = '<div style="color: #059669; background-color: #d1fae5; padding: 10px; border-radius: 6px; display: inline-block;">' +
+                            '<i class="fas fa-check-circle"></i> Validation Passed! Ready for upload.<br>' +
+                            '<small style="color: #047857;">Total files: ' + fileCount + ' (PDF/XML)</small></div>';
+    } else {
+      // Clear the file input if validation fails so it won't be uploaded
+      event.target.value = '';
+      fileNameDisplay.style.display = 'none';
+      resultDiv.innerHTML = '<div style="color: #dc2626; background-color: #fee2e2; padding: 10px; border-radius: 6px; display: inline-block;">' +
+                            '<i class="fas fa-times-circle"></i> Validation Failed!<br>' +
+                            '<small>' + errors.join("<br>") + '</small></div>';
+    }
+
+  }, function (e) {
+    event.target.value = '';
+    fileNameDisplay.style.display = 'none';
+    resultDiv.innerHTML = '<div style="color: #dc2626; background-color: #fee2e2; padding: 10px; border-radius: 6px; display: inline-block;">' +
+                          'Error reading zip file: ' + e.message + '</div>';
+  });
+});
+
+// Dataset file upload handling
+document.getElementById('dataset-file').addEventListener('change', function(event) {
+  var file = event.target.files[0];
+  var fileNameDisplay = document.getElementById('dataset-name-display');
+
+  if (!file) {
+      fileNameDisplay.style.display = 'none';
+      return;
+  }
+
+  // Display selected file name
+  fileNameDisplay.textContent = file.name;
+  fileNameDisplay.style.display = 'block';
+});
+
+// Drag and drop visual feedback for ZIP upload
+var uploadWrapper = document.querySelector('.file-upload-wrapper');
+var uploadInput = document.querySelector('.file-upload-input');
+
+['dragenter', 'dragover'].forEach(eventName => {
+  uploadInput.addEventListener(eventName, function() {
+    uploadWrapper.classList.add('drag-over');
+  }, false);
+});
+
+['dragleave', 'drop'].forEach(eventName => {
+  uploadInput.addEventListener(eventName, function() {
+    uploadWrapper.classList.remove('drag-over');
+  }, false);
+});
+
+// Drag and drop visual feedback for Dataset upload
+var datasetWrapper = document.getElementById('dataset-upload-wrapper');
+var datasetInput = document.getElementById('dataset-file');
+
+['dragenter', 'dragover'].forEach(eventName => {
+  datasetInput.addEventListener(eventName, function() {
+    datasetWrapper.classList.add('drag-over');
+  }, false);
+});
+
+['dragleave', 'drop'].forEach(eventName => {
+  datasetInput.addEventListener(eventName, function() {
+    datasetWrapper.classList.remove('drag-over');
+  }, false);
+});
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  var inputIndex = 1;
+  var outputIndex = 1;
+  var inputContainer = document.getElementById('po-input-fields-container');
+  var outputContainer = document.getElementById('po-output-fields-container');
+  var addInputBtn = document.getElementById('po-add-input-field');
+  var addOutputBtn = document.getElementById('po-add-output-field');
+
+  // Clone initial templates
+  var inputTemplateNode = document.getElementById('po-input-field-initial').cloneNode(true);
+  var outputTemplateNode = document.getElementById('po-output-field-initial').cloneNode(true);
+
+  function createClone(kind, index) {
+    var template = kind === 'input' ? inputTemplateNode : outputTemplateNode;
+    var clone = template.cloneNode(true);
+    clone.id = (kind === 'input' ? 'po-input-field' : 'po-output-field') + '-' + index;
+    var idMap = {};
+    clone.querySelectorAll('[id]').forEach(function(el) {
+      var oldId = el.id;
+      var newId = oldId + '-' + index;
+      idMap[oldId] = newId;
+      el.id = newId;
+      if (el.tagName === 'INPUT') {
+        if (el.type === 'checkbox') {
+          el.checked = false;
+        } else {
+          el.value = '';
+        }
+      } else if (el.tagName === 'TEXTAREA') {
+        el.value = '';
+      }
+    });
+    clone.querySelectorAll('label[for]').forEach(function(label) {
+      var oldFor = label.getAttribute('for');
+      if (idMap[oldFor]) {
+        label.setAttribute('for', idMap[oldFor]);
+      }
+    });
+
+    var rangeContainer = clone.querySelector(kind === 'input' ? '[id^="po-input-range-container"]' : '[id^="po-output-range-container"]');
+    var literalContainer = clone.querySelector(kind === 'input' ? '[id^="po-input-literal-container"]' : '[id^="po-output-literal-container"]');
+    if (rangeContainer) rangeContainer.style.display = 'none';
+    if (literalContainer) literalContainer.style.display = 'none';
+
+    return clone;
+  }
+
+  function handleDelete(e, kind) {
+    var btn = e.target.closest('.delete-button');
+    if (!btn) return;
+    var selector = kind === 'input' ? '[id^="po-input-field"]' : '[id^="po-output-field"]';
+    var block = btn.closest(selector);
+    if (block) block.remove();
+  }
+
+  function handleToggle(e, kind) {
+    var target = e.target;
+    if (!target || target.type !== 'checkbox') return;
+    var block = target.closest(kind === 'input' ? '[id^="po-input-field"]' : '[id^="po-output-field"]');
+    if (!block) return;
+    var isRange = target.id.indexOf(kind === 'input' ? 'po-input-add-range' : 'po-output-add-range') === 0;
+    var isLiteral = target.id.indexOf(kind === 'input' ? 'po-input-add-literal' : 'po-output-add-literal') === 0;
+
+    if (isRange) {
+      var r = block.querySelector(kind === 'input' ? '[id^="po-input-range-container"]' : '[id^="po-output-range-container"]');
+      if (r) r.style.display = target.checked ? 'block' : 'none';
+    }
+    if (isLiteral) {
+      var l = block.querySelector(kind === 'input' ? '[id^="po-input-literal-container"]' : '[id^="po-output-literal-container"]');
+      if (l) l.style.display = target.checked ? 'block' : 'none';
+    }
+  }
+
+  if (addInputBtn) {
+    addInputBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      var block = createClone('input', inputIndex++);
+      inputContainer.appendChild(block);
+    });
+  }
+
+  if (addOutputBtn) {
+    addOutputBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      var block = createClone('output', outputIndex++);
+      outputContainer.appendChild(block);
+    });
+  }
+
+  inputContainer.addEventListener('click', function(e) { handleDelete(e, 'input'); });
+  outputContainer.addEventListener('click', function(e) { handleDelete(e, 'output'); });
+  inputContainer.addEventListener('change', function(e) { handleToggle(e, 'input'); });
+  outputContainer.addEventListener('change', function(e) { handleToggle(e, 'output'); });
+
+  // Handle Run Optimization
+  var runBtn = document.getElementById('po-run-optimization');
+  if (runBtn) {
+    runBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+
+      var resultDiv = document.getElementById('po-optimization-results');
+      resultDiv.innerHTML = 'Submitting task... <i class="fas fa-spinner fa-spin"></i>';
+
+      if (typeof validateEmailInputById === 'function') {
+        var emailValid = validateEmailInputById('po-contact-email');
+        if (!emailValid) {
+          resultDiv.innerHTML = '';
+          return;
+        }
+      }
+
+      // 1. Collect Basic Info
+      var contactEmail = document.getElementById('po-contact-email').value.trim();
+      var taskName = document.getElementById('po-task-name').value.trim();
+      var fileType = document.getElementById('po-file-type').value;
+      var convertMode = document.getElementById('po-convert-mode').value;
+      var initialPrompt = document.getElementById('po-initial-prompt').value;
+      var demos = document.getElementById('po-demos').value;
+      var articleField = document.getElementById('po-article-field').value.trim();
+      var multipleEntities = document.getElementById('po-multiple').checked;
+
+      if (!taskName) {
+        alert('Please enter a Task Name.');
+        resultDiv.innerHTML = '';
+        return;
+      }
+
+      // 2. Collect Files
+      var zipInput = document.getElementById('source-zip');
+      if (!zipInput.files || zipInput.files.length === 0) {
+         alert('Please upload a Zip file.');
+         resultDiv.innerHTML = '';
+         return;
+      }
+
+      var datasetInput = document.getElementById('dataset-file');
+      if (!datasetInput.files || datasetInput.files.length === 0) {
+         alert('Please upload a Dataset file.');
+         resultDiv.innerHTML = '';
+         return;
+      }
+
+      // 3. Collect Fields
+      function collectFields(containerId, prefix) {
+          var container = document.getElementById(containerId);
+          var fields = [];
+          Array.from(container.children).forEach(function(block) {
+             var nameInput = block.querySelector('[id^="' + prefix + '-name"]');
+             if (!nameInput || !nameInput.value.trim()) return;
+
+             var typeInput = block.querySelector('[id^="' + prefix + '-type"]');
+             var descInput = block.querySelector('[id^="' + prefix + '-description"]');
+
+             var fieldData = {
+                 name: nameInput.value.trim(),
+                 type: typeInput.value,
+                 description: descInput.value.trim()
+             };
+
+             var rangeCheck = block.querySelector('[id^="' + prefix + '-add-range"]');
+             if (rangeCheck && rangeCheck.checked) {
+                 fieldData.hasRange = true;
+                 var minInput = block.querySelector('[id^="' + prefix + '-range-min"]');
+                 var maxInput = block.querySelector('[id^="' + prefix + '-range-max"]');
+                 if (minInput.value) fieldData.rangeMin = minInput.value;
+                 if (maxInput.value) fieldData.rangeMax = maxInput.value;
+             }
+
+             var literalCheck = block.querySelector('[id^="' + prefix + '-add-literal"]');
+             if (literalCheck && literalCheck.checked) {
+                 fieldData.hasLiteral = true;
+                 var listInput = block.querySelector('[id^="' + prefix + '-literal-list"]');
+                 if (listInput.value) fieldData.literalList = listInput.value;
+             }
+
+             fields.push(fieldData);
+          });
+          return fields;
+      }
+
+      var inputFields = collectFields('po-input-fields-container', 'po-input');
+      var outputFields = collectFields('po-output-fields-container', 'po-output');
+
+      function hasEmptyFieldName(containerId, prefix) {
+          var container = document.getElementById(containerId);
+          var hasEmpty = false;
+          Array.from(container.children).forEach(function(block) {
+              var nameInput = block.querySelector('[id^="' + prefix + '-name"]');
+              if (nameInput && !nameInput.value.trim()) {
+                  hasEmpty = true;
+              }
+          });
+          return hasEmpty;
+      }
+
+      if (hasEmptyFieldName('po-input-fields-container', 'po-input') ||
+          hasEmptyFieldName('po-output-fields-container', 'po-output')) {
+          alert('Field name cannot be empty. Please fill in all field names.');
+          resultDiv.innerHTML = '';
+          return;
+      }
+
+      if (inputFields.length === 0) {
+          alert('Please add at least one Input Field.');
+          resultDiv.innerHTML = '';
+          return;
+      }
+      if (outputFields.length === 0) {
+          alert('Please add at least one Output Field.');
+          resultDiv.innerHTML = '';
+          return;
+      }
+
+      // 4. Construct Config
+      var config = {
+          contactEmail: contactEmail,
+          taskName: taskName,
+          fileType: fileType,
+          convertMode: convertMode,
+          initialPrompt: initialPrompt,
+          demos: demos,
+          articleField: articleField,
+          multipleEntities: multipleEntities,
+          inputFields: inputFields,
+          outputFields: outputFields
+      };
+
+      // 5. Send Request
+      var formData = new FormData();
+      formData.append('source_zip', zipInput.files[0]);
+      formData.append('dataset_file', datasetInput.files[0]);
+      formData.append('config', JSON.stringify(config));
+
+      fetch('/omniextract/api/run_workflow_prompt_optimization', {
+          method: 'POST',
+          body: formData
+      })
+      .then(response => {
+          if (response.status === 429) {
+              throw new Error('LIMIT_EXCEEDED');
+          }
+          if (response.ok) {
+              return response.json();
+          } else {
+              return response.json().then(data => {
+                  throw new Error(data.detail || 'Error submitting task');
+              });
+          }
+      })
+      .then(data => {
+          resultDiv.innerHTML = `
+            <div class="alert alert-success">
+              <i class="fas fa-check-circle"></i>
+              <div>
+                <h4>Workflow Queued Successfully!</h4>
+                <p style="margin-bottom:6px;">Workflow ID: <strong>${data.workflow_id}</strong></p>
+                <p><a href="${omniWorkflowUrl(data.workflow_url)}" target="_blank" rel="noopener">Open the workflow status page</a>. It refreshes automatically every 5 minutes.</p>
+              </div>
+            </div>
+          `;
+      })
+      .catch(error => {
+          if (error.message === 'LIMIT_EXCEEDED') {
+              resultDiv.innerHTML = `
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <div>
+                        <h4>Limit Exceeded</h4>
+                        <p>今天服务处理次数已超过上线，请用户明天再使用或安装本地版本使用</p>
+                    </div>
+                </div>
+              `;
+          } else {
+              resultDiv.innerHTML = '<div class="alert alert-danger">' +
+                                    '<i class="fas fa-exclamation-circle"></i>' +
+                                    '<div><h4>Error</h4><p>' + error.message + '</p></div>' +
+                                    '</div>';
+          }
+      });
+
+    });
+  }
+});
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Export Configuration
+    document.getElementById('btn-export-config').addEventListener('click', function(e) {
+        e.preventDefault();
+
+        const config = {
+            taskName: document.getElementById('po-task-name').value,
+            fileType: document.getElementById('po-file-type').value,
+            convertMode: document.getElementById('po-convert-mode').value,
+            initialPrompt: document.getElementById('po-initial-prompt').value,
+            demos: document.getElementById('po-demos').value,
+            articleField: document.getElementById('po-article-field').value,
+            multipleEntities: document.getElementById('po-multiple').checked,
+            inputFields: [],
+            outputFields: []
+        };
+
+        // Helper to extract field data
+        function extractFieldData(container) {
+            const name = container.querySelector('[id^="po-input-name"], [id^="po-output-name"]').value;
+            const type = container.querySelector('[id^="po-input-type"], [id^="po-output-type"]').value;
+            const desc = container.querySelector('[id^="po-input-description"], [id^="po-output-description"]').value;
+
+            const rangeCheckbox = container.querySelector('[id^="po-input-add-range"], [id^="po-output-add-range"]');
+            const literalCheckbox = container.querySelector('[id^="po-input-add-literal"], [id^="po-output-add-literal"]');
+
+            const fieldData = {
+                name: name,
+                type: type,
+                description: desc,
+                hasRange: rangeCheckbox.checked,
+                hasLiteral: literalCheckbox.checked
+            };
+
+            if (rangeCheckbox.checked) {
+                fieldData.rangeMin = container.querySelector('[id^="po-input-range-min"], [id^="po-output-range-min"]').value;
+                fieldData.rangeMax = container.querySelector('[id^="po-input-range-max"], [id^="po-output-range-max"]').value;
+            }
+
+            if (literalCheckbox.checked) {
+                fieldData.literalList = container.querySelector('[id^="po-input-literal-list"], [id^="po-output-literal-list"]').value;
+            }
+
+            return fieldData;
+        }
+
+        // Input Fields
+        const inputContainers = document.getElementById('po-input-fields-container').children;
+        for (let i = 0; i < inputContainers.length; i++) {
+            config.inputFields.push(extractFieldData(inputContainers[i]));
+        }
+
+        // Output Fields
+        const outputContainers = document.getElementById('po-output-fields-container').children;
+        for (let i = 0; i < outputContainers.length; i++) {
+            config.outputFields.push(extractFieldData(outputContainers[i]));
+        }
+
+        // Download JSON
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(config, null, 2));
+        const downloadAnchorNode = document.createElement('a');
+        downloadAnchorNode.setAttribute("href", dataStr);
+        downloadAnchorNode.setAttribute("download", (config.taskName || "config") + ".json");
+        document.body.appendChild(downloadAnchorNode); // required for firefox
+        downloadAnchorNode.click();
+        downloadAnchorNode.remove();
+    });
+
+    // Load Configuration
+    document.getElementById('btn-load-config').addEventListener('click', function(e) {
+        e.preventDefault();
+        document.getElementById('file-load-config').click();
+    });
+
+    document.getElementById('file-load-config').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            try {
+                const config = JSON.parse(event.target.result);
+
+                // Static fields
+                document.getElementById('po-task-name').value = config.taskName || '';
+                document.getElementById('po-file-type').value = config.fileType || 'PDF';
+                document.getElementById('po-convert-mode').value = config.convertMode || 'byPart';
+                document.getElementById('po-initial-prompt').value = config.initialPrompt || '';
+                document.getElementById('po-demos').value = config.demos || '1';
+                document.getElementById('po-article-field').value = config.articleField || 'article_field';
+                document.getElementById('po-multiple').checked = config.multipleEntities !== undefined ? config.multipleEntities : true;
+
+                // Helper to populate field
+                function populateField(container, data, type) {
+                    const prefix = type === 'input' ? 'po-input' : 'po-output';
+
+                    container.querySelector(`[id^="${prefix}-name"]`).value = data.name || '';
+                    container.querySelector(`[id^="${prefix}-type"]`).value = data.type || 'str';
+                    container.querySelector(`[id^="${prefix}-description"]`).value = data.description || '';
+
+                    const rangeCheckbox = container.querySelector(`[id^="${prefix}-add-range"]`);
+                    rangeCheckbox.checked = data.hasRange || false;
+                    // Trigger change to update visibility
+                    rangeCheckbox.dispatchEvent(new Event('change', { bubbles: true }));
+
+                    if (data.hasRange) {
+                        container.querySelector(`[id^="${prefix}-range-min"]`).value = data.rangeMin || '';
+                        container.querySelector(`[id^="${prefix}-range-max"]`).value = data.rangeMax || '';
+                    }
+
+                    const literalCheckbox = container.querySelector(`[id^="${prefix}-add-literal"]`);
+                    literalCheckbox.checked = data.hasLiteral || false;
+                    // Trigger change to update visibility
+                    literalCheckbox.dispatchEvent(new Event('change', { bubbles: true }));
+
+                    if (data.hasLiteral) {
+                        container.querySelector(`[id^="${prefix}-literal-list"]`).value = data.literalList || '';
+                    }
+                }
+
+                // Reset and Populate Input Fields
+                const inputContainer = document.getElementById('po-input-fields-container');
+                // Remove all fields
+                while (inputContainer.firstChild) {
+                    inputContainer.removeChild(inputContainer.firstChild);
+                }
+
+                if (config.inputFields && config.inputFields.length > 0) {
+                    config.inputFields.forEach((fieldData) => {
+                        document.getElementById('po-add-input-field').click();
+                        const container = inputContainer.lastElementChild;
+                        populateField(container, fieldData, 'input');
+                    });
+                } else {
+                    // If no fields in config, add one empty default field
+                    document.getElementById('po-add-input-field').click();
+                }
+
+                // Reset and Populate Output Fields
+                const outputContainer = document.getElementById('po-output-fields-container');
+                // Remove all fields
+                while (outputContainer.firstChild) {
+                    outputContainer.removeChild(outputContainer.firstChild);
+                }
+
+                if (config.outputFields && config.outputFields.length > 0) {
+                    config.outputFields.forEach((fieldData) => {
+                        document.getElementById('po-add-output-field').click();
+                        const container = outputContainer.lastElementChild;
+                        populateField(container, fieldData, 'output');
+                    });
+                } else {
+                    // If no fields in config, add one empty default field
+                    document.getElementById('po-add-output-field').click();
+                }
+
+                // Reset file input so same file can be loaded again if needed
+                e.target.value = '';
+
+            } catch (error) {
+                console.error('Error parsing config file:', error);
+                alert('Error loading configuration file. Please check the file format.');
+            }
+        };
+        reader.readAsText(file);
+    });
+});
+</script>
+
+{% endblock %}

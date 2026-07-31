@@ -1,0 +1,482 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="page-hero">
+  <div class="hero-icon green"><i class="fas fa-wand-magic-sparkles"></i></div>
+  <div>
+    <h2>Document Extraction · Optimized</h2>
+    <p class="hero-desc">Extract structured information from PDF / XML documents using an <strong>optimized configuration
+      package</strong> (settings + tuned prompt) produced by the <strong>Prompt Optimization</strong> module.
+      This gives the best extraction quality. If you don't have a package yet, run Prompt Optimization first —
+      or use <strong>Document Extraction · Original</strong> for a hand-written schema.</p>
+  </div>
+</div>
+
+<form id="doc-extraction-optimized-form" class="module-container">
+
+  <!-- Step 1: Basics -->
+  <div class="section-container">
+    <div class="section-head">
+      <div class="step-num">1</div>
+      <div>
+        <div class="section-title">Task Basics</div>
+        <div class="section-desc">Name this run so you can recognize it later, and optionally leave an email to be notified.</div>
+      </div>
+    </div>
+    <div class="field-grid">
+      <div class="form-group">
+        <label class="form-label" for="task-name-optimized">Task Name <span class="req-badge">Required</span></label>
+        <input id="task-name-optimized" class="form-input" placeholder="Enter a name for this task" />
+        <small class="form-hint"><i class="fas fa-circle-info"></i>Provide a descriptive name for this optimized extraction task.</small>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="optim-contact-email">Contact Email <span class="opt-badge">Optional</span></label>
+        <input id="optim-contact-email" name="contact_email" class="form-input email-input" type="email" placeholder="Enter your email address" />
+        <small class="form-hint"><i class="fas fa-circle-info"></i>Leave blank to use the workflow status link only.</small>
+        <div class="email-error" style="display:none;color:#dc2626;font-size:13px;margin-top:4px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 2: Optimized configuration package -->
+  <div class="section-container">
+    <div class="section-head">
+      <div class="step-num">2</div>
+      <div>
+        <div class="section-title">Optimized Configuration Package</div>
+        <div class="section-desc">Upload the ZIP produced by Prompt Optimization. It must contain exactly two files:
+          <code>optim_settings.json</code> (the extraction schema) and <code>optim_prompt.json</code> (the tuned prompt).</div>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="optim-source-zip">Upload Zip File <span class="req-badge">Required</span></label>
+      <div class="file-upload-wrapper">
+        <input type="file" id="optim-source-zip" name="optim_source_zip" class="file-upload-input" accept=".zip" />
+        <div class="file-upload-box">
+          <i class="fas fa-box-archive file-upload-icon"></i>
+          <p class="file-upload-text">Click to upload or drag and drop</p>
+          <p class="file-upload-hint">ZIP file only (Must contain optim_settings.json &amp; optim_prompt.json)</p>
+          <div id="optim-file-name-display" style="display:none; margin-top: 10px; font-weight: 600; color: #334155;"></div>
+        </div>
+      </div>
+      <div id="optim-validation-result" style="margin-top: 15px; color: #666; font-size: 14px; text-align: center;"></div>
+    </div>
+  </div>
+
+  <!-- Step 3: Documents to extract from -->
+  <div class="section-container">
+    <div class="section-head">
+      <div class="step-num">3</div>
+      <div>
+        <div class="section-title">Documents to Extract From</div>
+        <div class="section-desc">Choose the document format, then upload a ZIP package with the documents to process.</div>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="optim-file-type">File Type <span class="req-badge">Required</span></label>
+      <select id="optim-file-type" class="form-select">
+        <option value="PDF">PDF</option>
+        <option value="scienceDirect">ScienceDirect</option>
+        <option value="PMC">PMC</option>
+      </select>
+      <small class="form-hint"><i class="fas fa-circle-info"></i>PDF for standard papers; ScienceDirect / PMC for the corresponding XML full-text formats.</small>
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="optim-data-zip">Upload Zip File <span class="req-badge">Required</span></label>
+      <div class="file-upload-wrapper">
+        <input type="file" id="optim-data-zip" name="optim_data_zip" class="file-upload-input" accept=".zip" />
+        <div class="file-upload-box">
+          <i class="fas fa-cloud-upload-alt file-upload-icon"></i>
+          <p class="file-upload-text">Click to upload or drag and drop</p>
+          <p class="file-upload-hint">ZIP file only (Max 30 PDFs/XMLs) — contents are validated automatically</p>
+          <div id="optim-data-file-name-display" style="display:none; margin-top: 10px; font-weight: 600; color: #334155;"></div>
+        </div>
+      </div>
+      <div id="optim-data-validation-result" style="margin-top: 15px; color: #666; font-size: 14px; text-align: center;"></div>
+    </div>
+  </div>
+
+  <!-- Step 4: Processing settings -->
+  <div class="section-container">
+    <div class="section-head">
+      <div class="step-num">4</div>
+      <div>
+        <div class="section-title">Processing Settings</div>
+        <div class="section-desc">Control how documents are split, judged and parallelized. These must match how the optimized package was created.</div>
+      </div>
+    </div>
+    <div class="field-grid">
+      <div class="form-group">
+        <label class="form-label" for="optim-convert-mode">Conversion Mode <span class="req-badge">Required</span></label>
+        <select id="optim-convert-mode" class="form-select">
+          <option value="byPart">By Part (divide document by article parts)</option>
+          <option value="wholeDoc">Whole Document (convert entire document as one)</option>
+        </select>
+        <small class="form-hint"><i class="fas fa-circle-info"></i>Should match the mode used during prompt optimization.</small>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="optim-judging">Judging Mode</label>
+        <select id="optim-judging" class="form-select">
+          <option value="">None</option>
+          <option value="confidence">Confidence</option>
+          <option value="score">Score</option>
+        </select>
+        <small class="form-hint"><i class="fas fa-circle-info"></i>Optional extra pass that rates each extraction (uses the Judge model).</small>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="optim-threads">Threads</label>
+      <input id="optim-threads" class="form-input" type="number" placeholder="6" value="6" />
+      <small class="form-hint"><i class="fas fa-circle-info"></i>Parallel workers for the batch.</small>
+    </div>
+  </div>
+
+  <!-- Action Buttons -->
+  <div class="form-actions">
+    <button id="optim-start-extraction" class="btn btn-primary"><i class="fas fa-play"></i>Start Optimized Extraction</button>
+    <button id="btn-export-config" class="btn btn-success"><i class="fas fa-file-export"></i>Export Config</button>
+    <button id="btn-load-config" class="btn btn-secondary"><i class="fas fa-folder-open"></i>Load Config</button>
+    <input type="file" id="file-load-config" style="display: none;" accept=".json">
+    <p class="form-hint" style="width:100%;margin-top:4px;"><i class="fas fa-lightbulb"></i>
+      After starting, you will get a <strong>workflow status page</strong> link — it refreshes automatically and provides the result download when finished.
+      <strong>Export Config</strong> saves only this page's settings (task name, file type, conversion mode, judging, threads) — not the uploaded ZIPs.
+    </p>
+    <div id="optim-extraction-results" style="width:100%;margin-top:8px"></div>
+  </div>
+</form>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+
+    // File Upload and Validation
+    document.getElementById('optim-source-zip').addEventListener('change', function(event) {
+        var file = event.target.files[0];
+        var fileNameDisplay = document.getElementById('optim-file-name-display');
+        var resultDiv = document.getElementById('optim-validation-result');
+
+        if (!file) {
+            fileNameDisplay.style.display = 'none';
+            return;
+        }
+
+        // Display selected file name
+        fileNameDisplay.textContent = file.name;
+        fileNameDisplay.style.display = 'block';
+
+        resultDiv.innerHTML = 'Validating... <i class="fas fa-spinner fa-spin"></i>';
+
+        JSZip.loadAsync(file).then(function(zip) {
+            var foundFiles = new Set();
+            var invalidFiles = [];
+
+            zip.forEach(function (relativePath, zipEntry) {
+                // Ignore directories and hidden files/macOS artifacts
+                if (!zipEntry.dir && !relativePath.startsWith('__MACOSX') && !relativePath.split('/').pop().startsWith('.')) {
+                    var fileName = relativePath.split('/').pop(); // Get simple filename
+                    if (fileName === 'optim_settings.json' || fileName === 'optim_prompt.json') {
+                        foundFiles.add(fileName);
+                    } else {
+                        invalidFiles.push(fileName);
+                    }
+                }
+            });
+
+            var errors = [];
+            if (!foundFiles.has('optim_settings.json')) {
+                errors.push("Missing required file: optim_settings.json");
+            }
+            if (!foundFiles.has('optim_prompt.json')) {
+                errors.push("Missing required file: optim_prompt.json");
+            }
+            if (invalidFiles.length > 0) {
+                errors.push("Contains invalid files: " + invalidFiles.join(", ") + ". Only optim_settings.json and optim_prompt.json are allowed.");
+            }
+
+            if (errors.length === 0) {
+                resultDiv.innerHTML = '<div style="color: #059669; background-color: #d1fae5; padding: 10px; border-radius: 6px; display: inline-block;">' +
+                                      '<i class="fas fa-check-circle"></i> Validation Passed! Ready for extraction.<br></div>';
+            } else {
+                // Clear the file input
+                event.target.value = '';
+                fileNameDisplay.style.display = 'none';
+                resultDiv.innerHTML = '<div style="color: #dc2626; background-color: #fee2e2; padding: 10px; border-radius: 6px; display: inline-block;">' +
+                                      '<i class="fas fa-times-circle"></i> Validation Failed!<br>' +
+                                      '<small>' + errors.join("<br>") + '</small></div>';
+            }
+
+        }, function (e) {
+            event.target.value = '';
+            fileNameDisplay.style.display = 'none';
+            resultDiv.innerHTML = '<div style="color: #dc2626; background-color: #fee2e2; padding: 10px; border-radius: 6px; display: inline-block;">' +
+                                  'Error reading zip file: ' + e.message + '</div>';
+        });
+    });
+
+    // Data File Upload and Validation (PDF/XML)
+    document.getElementById('optim-data-zip').addEventListener('change', function(event) {
+        var file = event.target.files[0];
+        var fileNameDisplay = document.getElementById('optim-data-file-name-display');
+        var resultDiv = document.getElementById('optim-data-validation-result');
+
+        if (!file) {
+            fileNameDisplay.style.display = 'none';
+            return;
+        }
+
+        // Display selected file name
+        fileNameDisplay.textContent = file.name;
+        fileNameDisplay.style.display = 'block';
+
+        resultDiv.innerHTML = 'Validating... <i class="fas fa-spinner fa-spin"></i>';
+
+        JSZip.loadAsync(file).then(function(zip) {
+            var fileCount = 0;
+            var validFileCount = 0;
+            var invalidFiles = [];
+
+            zip.forEach(function (relativePath, zipEntry) {
+                // Ignore directories and hidden files (starting with . or __MACOSX)
+                if (!zipEntry.dir && !relativePath.startsWith('__MACOSX') && !relativePath.split('/').pop().startsWith('.')) {
+                    fileCount++;
+                    var lowerPath = relativePath.toLowerCase();
+                    if (lowerPath.endsWith('.pdf') || lowerPath.endsWith('.xml')) {
+                        validFileCount++;
+                    } else {
+                        invalidFiles.push(relativePath);
+                    }
+                }
+            });
+
+            var errors = [];
+            if (validFileCount === 0) {
+                errors.push("No PDF or XML files found.");
+            }
+            if (invalidFiles.length > 0) {
+                errors.push("Contains invalid files (" + invalidFiles.length + "): " + invalidFiles.slice(0, 3).join(", ") + (invalidFiles.length > 3 ? "..." : ""));
+            }
+            if (fileCount > 30) {
+                errors.push("Too many files (" + fileCount + "). Max allowed is 30.");
+            }
+
+            if (errors.length === 0) {
+                resultDiv.innerHTML = '<div style="color: #059669; background-color: #d1fae5; padding: 10px; border-radius: 6px; display: inline-block;">' +
+                                      '<i class="fas fa-check-circle"></i> Validation Passed! Ready for upload.<br>' +
+                                      '<small style="color: #047857;">Total files: ' + fileCount + ' (PDF/XML)</small></div>';
+            } else {
+                // Clear the file input if validation fails so it won't be uploaded
+                event.target.value = '';
+                fileNameDisplay.style.display = 'none';
+                resultDiv.innerHTML = '<div style="color: #dc2626; background-color: #fee2e2; padding: 10px; border-radius: 6px; display: inline-block;">' +
+                                      '<i class="fas fa-times-circle"></i> Validation Failed!<br>' +
+                                      '<small>' + errors.join("<br>") + '</small></div>';
+            }
+
+        }, function (e) {
+            event.target.value = '';
+            fileNameDisplay.style.display = 'none';
+            resultDiv.innerHTML = '<div style="color: #dc2626; background-color: #fee2e2; padding: 10px; border-radius: 6px; display: inline-block;">' +
+                                  'Error reading zip file: ' + e.message + '</div>';
+        });
+    });
+
+    // Drag and drop visual feedback
+    var uploadWrapper = document.querySelector('.file-upload-wrapper');
+    var uploadInput = document.querySelector('.file-upload-input');
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+        uploadInput.addEventListener(eventName, function() {
+            uploadWrapper.classList.add('drag-over');
+        }, false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        uploadInput.addEventListener(eventName, function() {
+            uploadWrapper.classList.remove('drag-over');
+        }, false);
+    });
+
+    // Start Extraction
+    document.getElementById('optim-start-extraction').addEventListener('click', async function(e) {
+        e.preventDefault();
+
+        const resultDiv = document.getElementById('optim-extraction-results');
+        resultDiv.innerHTML = ''; // Clear previous results
+
+        if (typeof validateEmailInputById === 'function') {
+            var emailValid = validateEmailInputById('optim-contact-email');
+            if (!emailValid) {
+                return;
+            }
+        }
+
+        // Get file inputs
+        const configZipInput = document.getElementById('optim-source-zip');
+        const dataZipInput = document.getElementById('optim-data-zip');
+
+        if (!configZipInput.files[0]) {
+            alert('Please upload a Configuration Package.');
+            return;
+        }
+        if (!dataZipInput.files[0]) {
+            alert('Please upload a File Package (Data).');
+            return;
+        }
+
+        const taskName = document.getElementById('task-name-optimized').value.trim();
+        if (!taskName) {
+            alert('Please enter a Task Name.');
+            return;
+        }
+
+        try {
+            const zip = await JSZip.loadAsync(configZipInput.files[0]);
+            let settingsEntry = null;
+            zip.forEach(function(relativePath, zipEntry) {
+                if (!zipEntry.dir) {
+                    const fileName = relativePath.split('/').pop();
+                    if (fileName === 'optim_settings.json') {
+                        settingsEntry = zipEntry;
+                    }
+                }
+            });
+            if (settingsEntry) {
+                const settingsText = await settingsEntry.async('string');
+                const settings = JSON.parse(settingsText);
+                const inputFields = Array.isArray(settings.inputFields) ? settings.inputFields : [];
+                const outputFields = Array.isArray(settings.outputFields) ? settings.outputFields : [];
+                const hasEmptyInputName = inputFields.some(function(field) { return !field.name; });
+                const hasEmptyOutputName = outputFields.some(function(field) { return !field.name; });
+                if (hasEmptyInputName || hasEmptyOutputName) {
+                    alert('Field name in optim_settings.json cannot be empty. Please check configuration.');
+                    return;
+                }
+            }
+        } catch (error) {
+            alert('Error reading configuration package: ' + error.message);
+            return;
+        }
+
+        resultDiv.innerHTML = '<div style="color: #2563eb;"><i class="fas fa-spinner fa-spin"></i> Processing...</div>';
+
+        // Collect Data
+        const config = {
+            taskName: taskName,
+            contactEmail: document.getElementById('optim-contact-email').value,
+            fileType: document.getElementById('optim-file-type').value,
+            convertMode: document.getElementById('optim-convert-mode').value,
+            judging: document.getElementById('optim-judging').value,
+            threads: document.getElementById('optim-threads').value
+        };
+
+        const formData = new FormData();
+        formData.append('config_zip', configZipInput.files[0]);
+        formData.append('source_zip', dataZipInput.files[0]);
+        formData.append('config', JSON.stringify(config));
+
+        try {
+            const response = await fetch('/omniextract/api/run_workflow_doc_extraction_optimized', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (response.status === 429) {
+                resultDiv.innerHTML = `
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <div>
+                            <h4>Limit Exceeded</h4>
+                            <p>今天服务处理次数已超过上线，请用户明天再使用或安装本地版本使用</p>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || 'Unknown error occurred');
+            }
+
+            const result = await response.json();
+
+            resultDiv.innerHTML = `
+                <div class="alert alert-success">
+                    <i class="fas fa-check-circle"></i>
+                    <div>
+                        <h4>Workflow Started Successfully!</h4>
+                        <p style="margin-bottom:6px;">Workflow ID: <strong>${result.workflow_id}</strong></p>
+                        <p><a href="${omniWorkflowUrl(result.workflow_url)}" target="_blank" rel="noopener">Open the workflow status page</a>. It refreshes automatically every 5 minutes.</p>
+                    </div>
+                </div>
+            `;
+
+        } catch (error) {
+            resultDiv.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <div>
+                        <h4>Error</h4>
+                        <p>${error.message}</p>
+                    </div>
+                </div>
+            `;
+        }
+    });
+
+    // Export Config
+    document.getElementById('btn-export-config').addEventListener('click', function(e) {
+        e.preventDefault();
+
+        const config = {
+            taskName: document.getElementById('task-name-optimized').value,
+            fileType: document.getElementById('optim-file-type').value,
+            convertMode: document.getElementById('optim-convert-mode').value,
+            judging: document.getElementById('optim-judging').value,
+            threads: document.getElementById('optim-threads').value
+        };
+
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(config, null, 2));
+        const downloadAnchorNode = document.createElement('a');
+        downloadAnchorNode.setAttribute("href", dataStr);
+        downloadAnchorNode.setAttribute("download", "doc_extraction_optimized_config.json");
+        document.body.appendChild(downloadAnchorNode);
+        downloadAnchorNode.click();
+        downloadAnchorNode.remove();
+    });
+
+    // Load Config Button Click
+    document.getElementById('btn-load-config').addEventListener('click', function(e) {
+        e.preventDefault();
+        document.getElementById('file-load-config').click();
+    });
+
+    // Handle File Selection for Load Config
+    document.getElementById('file-load-config').addEventListener('change', function(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const config = JSON.parse(e.target.result);
+
+                if (config.taskName !== undefined) document.getElementById('task-name-optimized').value = config.taskName;
+                if (config.fileType !== undefined) document.getElementById('optim-file-type').value = config.fileType;
+                if (config.convertMode !== undefined) document.getElementById('optim-convert-mode').value = config.convertMode;
+                if (config.judging !== undefined) document.getElementById('optim-judging').value = config.judging;
+                if (config.threads !== undefined) document.getElementById('optim-threads').value = config.threads;
+
+                // Clear the file input so the same file can be selected again if needed
+                event.target.value = '';
+
+            } catch (error) {
+                alert('Error parsing configuration file: ' + error.message);
+            }
+        };
+        reader.readAsText(file);
+    });
+
+});
+</script>
+{% endblock %}

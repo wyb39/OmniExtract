@@ -1,0 +1,442 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-hero">
+    <div class="hero-icon"><i class="fas fa-sliders"></i></div>
+    <div>
+        <h2>Model Configuration</h2>
+        <p class="hero-desc">Connect OmniExtract to an LLM provider. All modules call the models configured here —
+            set this up once before running any extraction. You can review the currently saved settings below,
+            then edit and save new ones.</p>
+    </div>
+</div>
+
+<div class="card" style="padding:24px 28px;margin-bottom:24px;">
+    <div class="section-head">
+        <div class="step-num"><i class="fas fa-eye" style="font-size:.8rem;"></i></div>
+        <div>
+            <div class="section-title">Current Saved Settings</div>
+            <div class="section-desc">Switch tabs to inspect the model currently saved for each usage role (API keys are never displayed).</div>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+        <button class="tab-button active" onclick="openTab('main')">Main</button>
+        <button class="tab-button" onclick="openTab('prompt_generation')">Prompt Generation</button>
+        <button class="tab-button" onclick="openTab('judge')">Judge</button>
+        <button class="tab-button" onclick="openTab('coder')">Coder</button>
+    </div>
+
+    <!-- Tab Content -->
+    <div id="tab-content" class="config-card">
+        <!-- Content will be loaded here via JS -->
+        <div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Loading...</div>
+    </div>
+</div>
+
+<div class="card" style="padding:0;margin-bottom:24px;">
+    <div class="section-container" style="border-bottom:1px solid var(--line);">
+        <div class="section-head" style="margin-bottom:0;">
+            <div class="step-num"><i class="fas fa-pen" style="font-size:.8rem;"></i></div>
+            <div>
+                <div class="section-title">Edit &amp; Save a Model</div>
+                <div class="section-desc">Fill in the sections below, choose which usage role this model applies to, then save or test the connection.</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Model Identification -->
+    <div class="section-container">
+        <div class="section-head">
+            <div class="step-num">1</div>
+            <div>
+                <div class="section-title">Model Identification</div>
+                <div class="section-desc">Which model to call, and which provider family it belongs to.</div>
+            </div>
+        </div>
+        <div class="field-grid">
+            <div class="form-group">
+                <label class="form-label">Model Name <span class="req-badge">Required</span></label>
+                <input type="text" id="model-name" class="form-input" placeholder="gpt-4.1">
+                <small class="form-hint"><i class="fas fa-circle-info"></i>The exact model identifier used by the provider, e.g. gpt-4.1, deepseek-chat, gemini-2.0-flash.</small>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Model Type <span class="req-badge">Required</span></label>
+                <select id="model-type" class="form-select">
+                    <option value="openai">OpenAI</option>
+                    <option value="vllm">vLLM</option>
+                    <option value="ollama">Ollama</option>
+                    <option value="qwen">Qwen</option>
+                    <option value="deepseek">DeepSeek</option>
+                    <option value="gemini">Gemini</option>
+                    <option value="anthropic">Anthropic</option>
+                    <option value="openrouter">OpenRouter</option>
+                    <option value="sglang">SGLang</option>
+                    <option value="custom">Custom (OpenAI Compatible)</option>
+                </select>
+                <small class="form-hint"><i class="fas fa-circle-info"></i>Select the provider / serving framework that hosts the model.</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- API Configuration -->
+    <div class="section-container">
+        <div class="section-head">
+            <div class="step-num">2</div>
+            <div>
+                <div class="section-title">API Configuration</div>
+                <div class="section-desc">How to reach the provider. Leave fields empty to use provider defaults.</div>
+            </div>
+        </div>
+        <div class="field-grid">
+            <div class="form-group">
+                <label class="form-label">API Base URL <span class="opt-badge">Optional</span></label>
+                <input type="text" id="api-base" class="form-input" placeholder="API endpoint URL e.g. https://api.openai.com/v1">
+            </div>
+            <div class="form-group">
+                <label class="form-label">API Key <span class="opt-badge">Optional</span></label>
+                <input type="password" id="api-key" class="form-input" placeholder="YOUR-API-KEY">
+            </div>
+        </div>
+
+        <div class="help-text-container">
+            <p class="help-text-title"><i class="fas fa-key"></i> API Key Information:</p>
+            <ul class="help-text-list">
+                <li>API Keys are encrypted and stored in configuration files by default</li>
+                <li>You can also leave the API Key field empty and use the environment variable like OPENAI_API_KEY instead</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Model Usage -->
+    <div class="section-container">
+        <div class="section-head">
+            <div class="step-num">3</div>
+            <div>
+                <div class="section-title">Model Usage</div>
+                <div class="section-desc">Which role this model plays. Saving stores the settings under the selected role.</div>
+            </div>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Model Usage Type <span class="req-badge">Required</span></label>
+            <select id="model-usage" class="form-select form-select-limited">
+                <option value="main">Main</option>
+                <option value="prompt_generation">Prompt Generation</option>
+                <option value="judge">Judge</option>
+                <option value="coder">Coder</option>
+            </select>
+        </div>
+        <div class="help-text-container">
+            <p class="help-text-title"><i class="fas fa-circle-info"></i> Option Descriptions:</p>
+            <ul class="help-text-list">
+                <li>main: Primary model for general tasks, if the model for prompt generation/judge/coding is not specified, this model will be used instead</li>
+                <li>prompt_generation: Model for generating prompts</li>
+                <li>judge: Model for evaluation and scoring</li>
+                <li>coder: Model for code generation and programming tasks</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Sampling Parameters -->
+    <div class="section-container">
+        <div class="section-head">
+            <div class="step-num">4</div>
+            <div>
+                <div class="section-title">Sampling Parameters</div>
+                <div class="section-desc">Generation behavior. Defaults work well for extraction tasks.</div>
+            </div>
+        </div>
+        <div class="field-grid">
+            <div class="form-group">
+                <label class="form-label">Temperature</label>
+                <input type="number" id="temperature" class="form-input" min="0" max="2" step="0.1" value="0.0">
+                <div class="form-help">Controls randomness. Some thinking models require the provider default and may ignore this value.</div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Max Tokens</label>
+                <input type="number" id="max-tokens" class="form-input" min="1" value="2500">
+                <div class="form-help">Maximum generated tokens. For reasoning models this limit can include thinking/reasoning tokens.</div>
+            </div>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Top-p <span class="opt-badge">Optional</span></label>
+            <input type="number" id="top-p" class="form-input" min="0" max="1" step="0.01" placeholder="0.0-1.0 or leave empty">
+            <div class="form-help">Optional nucleus sampling value supported by the configured providers. Do not combine with temperature unless the model recommends it.</div>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Top-k <span class="opt-badge">Optional</span></label>
+            <input type="number" id="top-k" class="form-input" min="1" placeholder="Positive integer or leave empty">
+            <div class="form-help">Optional. Supported for Anthropic, Gemini, Qwen, vLLM, Ollama, SGLang, OpenRouter and compatible custom endpoints; not sent to OpenAI or DeepSeek.</div>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Min-p <span class="opt-badge">Optional</span></label>
+            <input type="number" id="min-p" class="form-input" min="0" max="1" step="0.01" placeholder="0.0-1.0 or leave empty">
+            <div class="form-help">Optional local/gateway sampling control. Supported for vLLM, Ollama, SGLang, OpenRouter and compatible custom endpoints.</div>
+        </div>
+    </div>
+
+    <!-- Cache Policy -->
+    <div class="section-container">
+        <div class="section-head">
+            <div class="step-num">5</div>
+            <div>
+                <div class="section-title">DSPy Cache</div>
+                <div class="section-desc">Reuse previous model responses to save tokens on repeated calls.</div>
+            </div>
+        </div>
+        <div class="form-group">
+            <label class="form-label">
+                <input type="checkbox" id="cache-for-optimization" checked>
+                Cache prompt optimization calls
+            </label>
+            <div class="form-help">Default: enabled. Cache hits are excluded from token usage.</div>
+        </div>
+        <div class="form-group">
+            <label class="form-label">
+                <input type="checkbox" id="cache-for-other">
+                Cache other model calls
+            </label>
+            <div class="form-help">Default: disabled.</div>
+        </div>
+    </div>
+
+    <!-- Thinking Parameters -->
+    <div class="section-container">
+        <div class="section-head">
+            <div class="step-num">6</div>
+            <div>
+                <div class="section-title">Thinking / Reasoning</div>
+                <div class="section-desc">Controls for reasoning-capable models. Only takes effect on providers that support it.</div>
+            </div>
+        </div>
+        <div class="form-group">
+            <label class="form-label">
+                <input type="checkbox" id="thinking-enabled">
+                Enable thinking
+            </label>
+            <div class="form-help">Uses provider controls when available; otherwise the model uses its default thinking behavior.</div>
+        </div>
+        <div class="field-grid">
+            <div class="form-group">
+                <label class="form-label">Reasoning Effort</label>
+                <select id="reasoning-effort" class="form-select">
+                    <option value="low">Low</option>
+                    <option value="medium" selected>Medium</option>
+                    <option value="high">High</option>
+                </select>
+                <div class="form-help">Used by OpenAI, OpenRouter and compatible endpoints when thinking is enabled.</div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Thinking Budget Tokens <span class="opt-badge">Optional</span></label>
+                <input type="number" id="thinking-budget-tokens" class="form-input" min="1" placeholder="Optional">
+                <div class="form-help">Optional explicit reasoning budget. Anthropic requires at least 1024 and max tokens must be greater than this value.</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="section-container" style="border-bottom:none;">
+        <div class="button-group">
+            <button id="save-config" class="btn btn-primary" onclick="saveConfig()"><i class="fas fa-floppy-disk"></i>Save Configuration</button>
+            <button id="test-connection" class="btn btn-secondary" onclick="testConnection()"><i class="fas fa-plug"></i>Test Connection</button>
+        </div>
+        <p class="form-hint" style="margin-top:10px;"><i class="fas fa-lightbulb"></i>Tip: run <strong>Test Connection</strong> first — it sends a "Hello" call with the values above without saving anything.</p>
+
+        <!-- Status Message -->
+        <div id="config-status" class="status-message"></div>
+    </div>
+</div>
+
+<script>
+    // Tab switching logic
+    function openTab(usageType) {
+        // Update tab buttons
+        document.querySelectorAll('.tab-button').forEach(btn => {
+            btn.classList.remove('active');
+            if (btn.onclick.toString().includes(usageType)) {
+                btn.classList.add('active');
+            }
+        });
+
+        // Fetch and display config
+        loadConfig(usageType);
+    }
+
+    async function loadConfig(usageType) {
+        const contentDiv = document.getElementById('tab-content');
+        contentDiv.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
+
+        try {
+            const response = await fetch(`/omniextract/api/model_settings?model_usage=${usageType}`);
+            const data = await response.json();
+
+            if (!response.ok) throw new Error(data.detail || 'Failed to load config');
+
+            renderConfigCard(data, usageType);
+        } catch (error) {
+            contentDiv.innerHTML = `
+                <div class="status-message status-error">
+                    Error loading configuration: ${error.message}
+                </div>
+            `;
+        }
+    }
+
+    function renderConfigCard(data, usageType) {
+        const contentDiv = document.getElementById('tab-content');
+
+        if (!data || Object.keys(data).length === 0) {
+            contentDiv.innerHTML = `
+                <h4 style="margin-bottom: 15px; text-transform: capitalize;">${usageType.replace('_', ' ')} Configuration</h4>
+                <div class="no-config-message">No configuration available for this usage type.</div>
+            `;
+            return;
+        }
+
+        let html = `<h4 style="margin-bottom: 15px; text-transform: capitalize;">${usageType.replace('_', ' ')} Configuration</h4><div class="config-items">`;
+
+        const keys = Object.keys(data).filter(k => k !== 'api_key');
+        let currentPair = [];
+
+        keys.forEach((key, index) => {
+            const displayKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+            const value = data[key] === null ? 'Not set' : data[key];
+
+            const itemHtml = `
+                <div class="config-item">
+                    <div class="config-item-key">${displayKey}</div>
+                    <div class="config-item-value">${value}</div>
+                </div>
+            `;
+
+            currentPair.push(itemHtml);
+
+            if (currentPair.length === 2 || index === keys.length - 1) {
+                html += `<div class="config-item-pair">${currentPair.join('')}</div>`;
+                currentPair = [];
+            }
+        });
+
+        html += '</div>';
+        contentDiv.innerHTML = html;
+    }
+
+    // Load main config by default
+    document.addEventListener('DOMContentLoaded', () => {
+        openTab('main');
+        document.getElementById('nav-model-config').classList.add('active');
+    });
+
+    // Save Configuration
+    async function saveConfig() {
+        const btn = document.getElementById('save-config');
+        const statusDiv = document.getElementById('config-status');
+        btn.disabled = true;
+        btn.textContent = 'Saving...';
+        statusDiv.className = 'status-message';
+        statusDiv.style.display = 'none';
+
+        const config = {
+            model_name: document.getElementById('model-name').value,
+            model_type: document.getElementById('model-type').value,
+            api_base: document.getElementById('api-base').value,
+            api_key: document.getElementById('api-key').value,
+            model_usage: document.getElementById('model-usage').value,
+            temperature: parseFloat(document.getElementById('temperature').value),
+            max_tokens: parseInt(document.getElementById('max-tokens').value),
+            top_p: document.getElementById('top-p').value ? parseFloat(document.getElementById('top-p').value) : null,
+            top_k: document.getElementById('top-k').value ? parseInt(document.getElementById('top-k').value) : null,
+            min_p: document.getElementById('min-p').value ? parseFloat(document.getElementById('min-p').value) : null,
+            cache_for_optimization: document.getElementById('cache-for-optimization').checked,
+            cache_for_other: document.getElementById('cache-for-other').checked,
+            thinking_enabled: document.getElementById('thinking-enabled').checked,
+            reasoning_effort: document.getElementById('reasoning-effort').value,
+            thinking_budget_tokens: document.getElementById('thinking-budget-tokens').value ? parseInt(document.getElementById('thinking-budget-tokens').value) : null
+        };
+
+        try {
+            const response = await fetch('/omniextract/api/modify_model', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(config)
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) throw new Error(result.detail || 'Failed to save configuration');
+
+            statusDiv.textContent = result.message || 'Configuration saved successfully!';
+            statusDiv.className = 'status-message status-success';
+
+            // Reload the config display for the updated usage type
+            if (document.querySelector('.tab-button.active').onclick.toString().includes(config.model_usage)) {
+                loadConfig(config.model_usage);
+            }
+        } catch (error) {
+            statusDiv.textContent = `Error: ${error.message}`;
+            statusDiv.className = 'status-message status-error';
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Save Configuration';
+        }
+    }
+
+    // Test Connection
+    async function testConnection() {
+        const btn = document.getElementById('test-connection');
+        const statusDiv = document.getElementById('config-status');
+        btn.disabled = true;
+        btn.textContent = 'Testing...';
+        statusDiv.className = 'status-message';
+        statusDiv.style.display = 'none';
+
+        const config = {
+            model_name: document.getElementById('model-name').value,
+            model_type: document.getElementById('model-type').value,
+            api_base: document.getElementById('api-base').value,
+            api_key: document.getElementById('api-key').value,
+            model_usage: document.getElementById('model-usage').value,
+            temperature: parseFloat(document.getElementById('temperature').value),
+            max_tokens: parseInt(document.getElementById('max-tokens').value),
+            top_p: document.getElementById('top-p').value ? parseFloat(document.getElementById('top-p').value) : null,
+            top_k: document.getElementById('top-k').value ? parseInt(document.getElementById('top-k').value) : null,
+            min_p: document.getElementById('min-p').value ? parseFloat(document.getElementById('min-p').value) : null,
+            cache_for_optimization: document.getElementById('cache-for-optimization').checked,
+            cache_for_other: document.getElementById('cache-for-other').checked,
+            thinking_enabled: document.getElementById('thinking-enabled').checked,
+            reasoning_effort: document.getElementById('reasoning-effort').value,
+            thinking_budget_tokens: document.getElementById('thinking-budget-tokens').value ? parseInt(document.getElementById('thinking-budget-tokens').value) : null
+        };
+
+        try {
+            // Need to pass data and prompt as query param or body
+            // The python endpoint: def model_test_call(data: ModelSettings, prompt: str = "Hello"):
+            // It expects 'data' in body (JSON) and 'prompt' as query param.
+
+            const response = await fetch('/omniextract/api/model_test_call?prompt=Hello', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(config)
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) throw new Error(result.detail || 'Connection test failed');
+
+            statusDiv.textContent = `Success! Response: ${result.result}`;
+            statusDiv.className = 'status-message status-success';
+        } catch (error) {
+            statusDiv.textContent = `Connection Test Failed: ${error.message}`;
+            statusDiv.className = 'status-message status-error';
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Test Connection';
+        }
+    }
+</script>
+{% endblock %}

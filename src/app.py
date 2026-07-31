@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from router import routerTest
 from router import ui_router
+from router import ui_router_v2
 from router import workflow_router
 import baseUtil
 
@@ -34,6 +35,8 @@ app.include_router(workflow_router.router, prefix="/omniextract")
 app.mount("/omniextract/assets", StaticFiles(directory=assets_dir), name="omniextract-assets")
 app.include_router(ui_router.root_router)
 app.include_router(ui_router.router, prefix="/omniextract")
+# Redesigned UI preview (ui_jinja_v2) served alongside the original UI.
+app.include_router(ui_router_v2.router, prefix="/omniextract/v2")
 
 
 @app.on_event("startup")

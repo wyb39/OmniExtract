@@ -33,6 +33,7 @@ router = APIRouter()
 root_dir = os.path.abspath(baseUtil.get_root_path())
 process_dir = os.path.join(root_dir, "process")
 templates = Jinja2Templates(directory=os.path.join(root_dir, "ui_jinja", "templates"))
+templates_v2 = Jinja2Templates(directory=os.path.join(root_dir, "ui_jinja_v2", "templates"))
 _optimization_queue: queue.Queue[Dict[str, Any]] = queue.Queue()
 _worker_lock = threading.Lock()
 _workers_started = False
@@ -369,6 +370,22 @@ def workflow_status_page(request: Request, workflow_id: str, token: str | None =
     with open(status_path, "r", encoding="utf-8") as handle:
         status = _public_status(workflow_id, json.load(handle), request, token or "")
     return templates.TemplateResponse(
+        "workflow_status.html",
+        {"request": request, "status": status, "workflow_id": workflow_id},
+    )
+
+
+# v2 preview of the status page. Identical data and token authorization as the
+# route above; only the rendered template differs.
+@router.get("/v2/workflow/{workflow_id}", name="workflow_status_page_v2")
+def workflow_status_page_v2(request: Request, workflow_id: str, token: str | None = None):
+    workspace = _authorize(workflow_id, token)
+    status_path = os.path.join(workspace, "workflow_status.json")
+    if not os.path.isfile(status_path):
+        raise HTTPException(status_code=404, detail="Workflow not found")
+    with open(status_path, "r", encoding="utf-8") as handle:
+        status = _public_status(workflow_id, json.load(handle), request, token or "")
+    return templates_v2.TemplateResponse(
         "workflow_status.html",
         {"request": request, "status": status, "workflow_id": workflow_id},
     )
