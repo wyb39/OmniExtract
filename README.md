@@ -189,9 +189,9 @@ documents and exposes `processing_report.json` as a downloadable artifact.
 The report is also included inside the returned result ZIP.
 
 The production mechanism is concentrated in three commented modules:
-`src/error_handling.py` defines the report contract, exception mapping and
-isolated batch executor; `src/processing_adapters.py` provides the
-single-document parsing boundary; and `src/token_usage.py` normalizes and
+`src/common/error_handling.py` defines the report contract, exception mapping
+and isolated batch executor; `src/parsing/processing_adapters.py` provides the
+single-document parsing boundary; and `src/common/token_usage.py` normalizes and
 aggregates provider usage fields. The existing service, CLI and workflow files
 only contain integration calls.
 
@@ -215,7 +215,7 @@ You can start using OmniExtract through the command-line interface. Please refer
 
 > **PDF input uses the integrated Hybrid/OpenDoc parser.**
 > Hybrid is the production default. To switch the production flow to full
-> OpenDoc, edit `PDF_PARSER_BACKEND` in `src/articleUtil.py` to `"opendoc"`.
+> OpenDoc, edit `PDF_PARSER_BACKEND` in `src/parsing/articleUtil.py` to `"opendoc"`.
 > This switch is intentionally internal and does not change the existing
 > CLI/API/YAML input parameters.
 <!--

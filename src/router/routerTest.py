@@ -3,11 +3,11 @@ from loguru import logger
 from typing import Literal
 import os
 import json
-from model import (
+from src.model.model import (
     get_model_settings,
     ModelSettings,
 )
-from service import (
+from src.service.service import (
     optim,
     optim_custom,
     pred,
@@ -18,14 +18,14 @@ from service import (
     extract_table_service,
     build_optm_set,
 )
-from params import (
+from src.model.params import (
     PathSettings,
     TableExtractionParams,
     ExtractTableServiceParams,
     BuildTrainSetParams,
 )
-from optimUtil import OptimSettings
-from evalUtil import PredictionSettings, PredTrainedSettings
+from src.utils.optimUtil import OptimSettings
+from src.utils.evalUtil import PredictionSettings, PredTrainedSettings
 
 router = APIRouter()
 

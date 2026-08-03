@@ -1,4 +1,4 @@
-from optimUtil import DspyField, create_output_model_class
+from src.utils.optimUtil import DspyField, create_output_model_class
 import pandas as pd
 from tqdm import tqdm
 from loguru import logger
@@ -11,8 +11,8 @@ import json
 import os
 import xml.etree.ElementTree as ET
 from bs4 import BeautifulSoup
-from pdf_parser import convert_pdf
-from pdf_markdown_renderer import split_md as split_pdf_markdown
+from src.parsing.pdf_parser import convert_pdf
+from src.parsing.pdf_markdown_renderer import split_md as split_pdf_markdown
 
 # The integrated production path is intentionally fixed here.  Keep this as an
 # internal switch so the public CLI/API/YAML contracts remain unchanged.  Set

@@ -16,9 +16,9 @@ from typing import Any, Callable, Dict, Iterable, List
 
 from loguru import logger
 
-from evalUtil import PredictionSettings
-from optimUtil import DspyField, OptimSettings
-from service import (
+from src.utils.evalUtil import PredictionSettings
+from src.utils.optimUtil import DspyField, OptimSettings
+from src.service.service import (
     build_optm_set,
     extract_table_service,
     file_to_json,
@@ -26,7 +26,7 @@ from service import (
     parse_table_to_tsv,
     pred,
 )
-from error_handling import (
+from src.common.error_handling import (
     REPORT_FILENAME,
     ReportedTaskError,
     merge_report_files,
@@ -57,7 +57,7 @@ def _notify(
     if not contact_email:
         return
     try:
-        from workflow_notifications import send_workflow_notification
+        from src.workflow.workflow_notifications import send_workflow_notification
 
         send_workflow_notification(
             recipient_email=contact_email,

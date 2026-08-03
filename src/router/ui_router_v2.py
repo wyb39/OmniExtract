@@ -11,7 +11,7 @@ import os
 from fastapi import APIRouter, Request
 from fastapi.templating import Jinja2Templates
 
-import baseUtil
+from src.common import baseUtil
 
 
 root_dir = os.path.abspath(baseUtil.get_root_path())

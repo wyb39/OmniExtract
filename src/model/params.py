@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from typing import Literal, Optional
-from optimUtil import DspyField
+from src.utils.optimUtil import DspyField
 
 
 class PathSettings(BaseModel):

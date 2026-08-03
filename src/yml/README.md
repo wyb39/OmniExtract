@@ -43,7 +43,7 @@ Refer to each individual configuration file template for detailed parameter expl
 PDF input is handled by the integrated Hybrid/OpenDoc flow automatically; no
 additional parser fields are required in the configuration files. The default
 production backend is Hybrid. To run full OpenDoc instead, edit the internal
-`PDF_PARSER_BACKEND` constant in `src/articleUtil.py` from `"hybrid"` to
+`PDF_PARSER_BACKEND` constant in `src/parsing/articleUtil.py` from `"hybrid"` to
 `"opendoc"`; this deliberately is not part of the public YAML/API contract.
 Provision model files under `models/opendoc` or set
 `OMNIEXTRACT_OPENDOC_MODEL_DIR` before running.

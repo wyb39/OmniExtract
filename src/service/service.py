@@ -6,8 +6,8 @@ import tempfile
 import pandas as pd
 from loguru import logger
 from typing import Literal
-from custom_optimizer.miprov2_custom import MIPROv2_Custom
-from optimUtil import (
+from src.utils.custom_optimizer.miprov2_custom import MIPROv2_Custom
+from src.utils.optimUtil import (
     OptimSettings,
     wrapInput2Signature,
     loadCustomOptimData,
@@ -17,37 +17,37 @@ from optimUtil import (
     DspyField,
     checkImageSettings,
 )
-from evalUtil import (
+from src.utils.evalUtil import (
     PredictionSettings,
     predCustomData,
     judgeFactory,
     custom_judge_metric,
     savePredictResult,
 )
-from model import (
+from src.model.model import (
     model_setting_instance,
     model_setting_instance_prompt,
     model_setting_instance_image,
 )
-from articleUtil import (
+from src.parsing.articleUtil import (
     parse_article_to_md,
     parse_xml_to_md,
     parse_pubmed_xml_to_md,
     parse_tex_to_md_batch,
 )
-from articleUtil import (
+from src.parsing.articleUtil import (
     split_md,
     convert_md_to_json,
     build_optm_set_from_document_and_extracted_information,
     build_optm_set_from_article_and_extracted_information,
     merge_json_files_to_dataset,
 )
-from tableExtractUtil import (
+from src.utils.tableExtractUtil import (
     classify_tables,
     generate_example_tables,
     generate_format_tables_with_extract4correct,
 )
-from error_handling import (
+from src.common.error_handling import (
     ProcessingReport,
     REPORT_FILENAME,
     ReportedTaskError,
@@ -55,8 +55,8 @@ from error_handling import (
     write_failure_and_wrap,
     write_report,
 )
-from processing_adapters import documents_to_json, process_table_documents
-from token_usage import track_token_usage
+from src.parsing.processing_adapters import documents_to_json, process_table_documents
+from src.common.token_usage import track_token_usage
 
 
 def _validate_optimization_dataset(dataset):
@@ -599,7 +599,7 @@ def _parse_table_to_tsv_impl(
     Returns:
         list: List of files that failed to process
     """
-    from tableUtil import (
+    from src.utils.tableUtil import (
         parse_file_for_table_extraction_pdf,
         parse_file_for_table_extraction_tex,
         parse_file_for_table_extraction_pmc,

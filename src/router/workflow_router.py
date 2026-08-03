@@ -20,8 +20,8 @@ from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.templating import Jinja2Templates
 
-import baseUtil
-from workflow_service import (
+from src.common import baseUtil
+from src.workflow.workflow_service import (
     run_workflow_doc_extraction,
     run_workflow_doc_extraction_optimized,
     run_workflow_prompt_optimization,

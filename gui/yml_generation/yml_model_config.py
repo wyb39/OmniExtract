@@ -45,7 +45,7 @@ def generate_model_config_yaml(
     config = {
         "# Model Configuration Template": "",
         "# Copy this file and modify according to your needs": "",
-        "# This file contains the configuration for ModelSettings class as defined in src/model.py": "",
+        "# This file contains the configuration for ModelSettings class as defined in src/model/model.py": "",
         "# === MODEL IDENTIFICATION ===": "",
         "# Define the model name and provider type": "",
         "model_name": model_name,

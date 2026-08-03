@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, Sequence, TypeVar
 
-from token_usage import TokenUsage, current_token_usage
+from src.common.token_usage import TokenUsage, current_token_usage
 
 
 REPORT_FILENAME = "processing_report.json"

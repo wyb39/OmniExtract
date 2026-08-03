@@ -1,9 +1,11 @@
 import sys
-import os
+from pathlib import Path
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
-from cli.cli_handler import main
+from src.cli.cli_handler import main
 
 if __name__ == '__main__':
     main()

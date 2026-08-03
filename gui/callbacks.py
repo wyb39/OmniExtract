@@ -15,7 +15,7 @@ from writeback import generate_dataset_fields, generate_extract_output_fields, w
 from call_cli import create_initial_log, cancel_task
 from process_manager import process_manager
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
-from cli.cli_handler import modify_model, run_model_test_call
+from src.cli.cli_handler import modify_model, run_model_test_call
 
 
 def parse_field_element_to_dict(field_element, field_type="input"):

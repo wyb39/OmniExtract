@@ -13,7 +13,7 @@ from typing import Literal, List, Any
 import textdistance as tds
 import copy
 import ast
-from model import model_setting_instance, model_setting_instance_judge
+from src.model.model import model_setting_instance, model_setting_instance_judge
 
 
 class DspyField(BaseModel):

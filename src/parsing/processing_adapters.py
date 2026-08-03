@@ -16,7 +16,7 @@ import tempfile
 from pathlib import Path
 from typing import Any, Callable
 
-from error_handling import DocumentStageError, ProcessingReport, run_isolated
+from src.common.error_handling import DocumentStageError, ProcessingReport, run_isolated
 
 
 _SUFFIXES = {
@@ -98,13 +98,13 @@ def _output_stems(root: Path, files: list[Path]) -> dict[Path, str]:
 def _converter(file_type: str) -> Callable[[Path, Path], Any]:
     # Imports stay lazy so non-parsing CLI commands do not initialize parser
     # dependencies or model libraries.
-    from articleUtil import (
+    from src.parsing.articleUtil import (
         PDF_PARSER_BACKEND,
         PubMedCentralXmlParser,
         ScienceDirectXmlParser,
         TeXProcessor,
     )
-    from pdf_parser import convert_pdf
+    from src.parsing.pdf_parser import convert_pdf
 
     if file_type == "pdf":
         return lambda source, destination: convert_pdf(
@@ -208,7 +208,7 @@ def documents_to_json(
                 if mode == "wholedoc":
                     payload = {"Document": markdown.read_text(encoding="utf-8")}
                 else:
-                    from pdf_markdown_renderer import split_markdown_file
+                    from src.parsing.pdf_markdown_renderer import split_markdown_file
 
                     payload = split_markdown_file(markdown)
                     if not isinstance(payload, dict):

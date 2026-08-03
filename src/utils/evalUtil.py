@@ -11,10 +11,10 @@ import dspy
 from loguru import logger
 from pydantic import BaseModel
 
-from optimUtil import wrapOneDspyField, DspyField, create_output_model_class
-from model import model_setting_instance, model_setting_instance_judge
+from src.utils.optimUtil import wrapOneDspyField, DspyField, create_output_model_class
+from src.model.model import model_setting_instance, model_setting_instance_judge
 from dspy.utils.parallelizer import ParallelExecutor
-from error_handling import Issue, ProcessingReport, run_isolated
+from src.common.error_handling import Issue, ProcessingReport, run_isolated
 
 
 # class PredNovelSettings(OptimSettings):

@@ -1,10 +1,19 @@
 import argparse
 import os
+import sys
 from threading import Thread
 import random
+from pathlib import Path
+
+
+# Keep ``python src/main.py`` working while the implementation uses package
+# imports rooted at ``src``.
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from loguru import logger
-import baseUtil
+from src.common import baseUtil
 
 
 def parse_args():
@@ -62,7 +71,7 @@ if __name__ == '__main__':
 
     # Import after the cache environment variables are set.
     import uvicorn
-    from app import app as fastApp
+    from src.app import app as fastApp
 
     find_port()
     # uvicornserverThread()

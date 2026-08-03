@@ -2,11 +2,11 @@ import argparse
 import os
 import json
 from loguru import logger
-from model import (
+from src.model.model import (
     get_model_settings as get_model_settings_func,
     ModelSettings
 )
-from service import (
+from src.service.service import (
     optim,
     optim_custom,
     pred,
@@ -18,16 +18,16 @@ from service import (
     extract_table_service
 
 )
-from params import (
+from src.model.params import (
     PathSettings,
     TableExtractionParams,
     ExtractTableServiceParams,
     BuildTrainSetParams,
 )
-from optimUtil import OptimSettings
-from evalUtil import PredictionSettings
+from src.utils.optimUtil import OptimSettings
+from src.utils.evalUtil import PredictionSettings
 from .yamlParser import yaml_to_class
-from error_handling import ReportedTaskError
+from src.common.error_handling import ReportedTaskError
 
 
 def get_model_settings(model_usage):

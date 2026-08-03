@@ -5,9 +5,9 @@ import os
 import shutil
 import pandas as pd
 from loguru import logger
-from model import get_model_settings, model_setting_instance, model_setting_instance_coder
+from src.model.model import get_model_settings, model_setting_instance, model_setting_instance_coder
 from dspy.utils.parallelizer import ParallelExecutor
-from optimUtil import create_output_model_class, DspyField
+from src.utils.optimUtil import create_output_model_class, DspyField
 from typing import List
 import chardet
 

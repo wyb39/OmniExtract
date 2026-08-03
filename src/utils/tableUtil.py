@@ -11,7 +11,7 @@ from bs4 import BeautifulSoup
 import requests
 import re
 from pylatexenc.latex2text import LatexNodes2Text
-from articleUtil import (
+from src.parsing.articleUtil import (
     ScienceDirectXmlParser,
     PubMedCentralXmlParser,
     parse_article_to_md,
@@ -534,7 +534,7 @@ def parse_tex_tables_to_tsv(
     """
     try:
         # Import TeXProcessor here to avoid circular imports
-        from articleUtil import TeXProcessor
+        from src.parsing.articleUtil import TeXProcessor
 
         # Ensure save directory exists
         os.makedirs(save_path, exist_ok=True)
