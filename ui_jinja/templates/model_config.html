@@ -116,23 +116,6 @@
         <div class="form-help">Optional local/gateway sampling control. Supported for vLLM, Ollama, SGLang, OpenRouter and compatible custom endpoints.</div>
     </div>
 
-    <!-- Cache Policy -->
-    <h3 class="section-title">DSPy Cache</h3>
-    <div class="form-group">
-        <label class="form-label">
-            <input type="checkbox" id="cache-for-optimization" checked>
-            Cache prompt optimization calls
-        </label>
-        <div class="form-help">Default: enabled. Cache hits are excluded from token usage.</div>
-    </div>
-    <div class="form-group">
-        <label class="form-label">
-            <input type="checkbox" id="cache-for-other">
-            Cache other model calls
-        </label>
-        <div class="form-help">Default: disabled.</div>
-    </div>
-
     <!-- Thinking Parameters -->
     <h3 class="section-title">Thinking / Reasoning</h3>
     <div class="form-group">
@@ -323,7 +306,9 @@
 
         let html = `<h4 style="margin-bottom: 15px; text-transform: capitalize;">${usageType.replace('_', ' ')} Configuration</h4><div class="config-items">`;
         
-        const keys = Object.keys(data).filter(k => k !== 'api_key');
+        // api_key is never shown; the DSPy cache switches are configured via
+        // service startup flags (see src/main.py), not per-model settings.
+        const keys = Object.keys(data).filter(k => !['api_key', 'cache_for_optimization', 'cache_for_other'].includes(k));
         let currentPair = [];
 
         keys.forEach((key, index) => {
@@ -375,8 +360,6 @@
             top_p: document.getElementById('top-p').value ? parseFloat(document.getElementById('top-p').value) : null,
             top_k: document.getElementById('top-k').value ? parseInt(document.getElementById('top-k').value) : null,
             min_p: document.getElementById('min-p').value ? parseFloat(document.getElementById('min-p').value) : null,
-            cache_for_optimization: document.getElementById('cache-for-optimization').checked,
-            cache_for_other: document.getElementById('cache-for-other').checked,
             thinking_enabled: document.getElementById('thinking-enabled').checked,
             reasoning_effort: document.getElementById('reasoning-effort').value,
             thinking_budget_tokens: document.getElementById('thinking-budget-tokens').value ? parseInt(document.getElementById('thinking-budget-tokens').value) : null
@@ -431,8 +414,6 @@
             top_p: document.getElementById('top-p').value ? parseFloat(document.getElementById('top-p').value) : null,
             top_k: document.getElementById('top-k').value ? parseInt(document.getElementById('top-k').value) : null,
             min_p: document.getElementById('min-p').value ? parseFloat(document.getElementById('min-p').value) : null,
-            cache_for_optimization: document.getElementById('cache-for-optimization').checked,
-            cache_for_other: document.getElementById('cache-for-other').checked,
             thinking_enabled: document.getElementById('thinking-enabled').checked,
             reasoning_effort: document.getElementById('reasoning-effort').value,
             thinking_budget_tokens: document.getElementById('thinking-budget-tokens').value ? parseInt(document.getElementById('thinking-budget-tokens').value) : null

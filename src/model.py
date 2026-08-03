@@ -33,6 +33,28 @@ _SEEN_DSPY_RESPONSES: set[int] = set()
 _SEEN_DSPY_RESPONSES_LOCK = RLock()
 
 
+def _env_flag(name: str) -> bool | None:
+    """Read a boolean flag from an environment variable; None when unset."""
+    raw = os.getenv(name)
+    if raw is None:
+        return None
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _resolve_cache_setting(for_optimization: bool, fallback: bool) -> bool:
+    """DSPy cache is configured via service startup flags (see main.py).
+
+    The flags are exposed through environment variables; when they are absent
+    (e.g. the CLI entry point) the stored model setting is used as fallback.
+    """
+    override = _env_flag(
+        "OMNIEXTRACT_CACHE_FOR_OPTIMIZATION"
+        if for_optimization
+        else "OMNIEXTRACT_CACHE_FOR_OTHER"
+    )
+    return override if override is not None else fallback
+
+
 def _is_uncached_dspy_response(response: Any, cache_enabled: bool) -> bool:
     """Return False when DSPy returned the same in-memory cached response."""
 
@@ -457,10 +479,13 @@ class ModelSettings(BaseModel):
             "model": model_name,
             "model_type": "chat",
             "api_key": api_key,
-            "cache": (
-                self.cache_for_optimization
-                if for_optimization
-                else self.cache_for_other
+            "cache": _resolve_cache_setting(
+                for_optimization,
+                (
+                    self.cache_for_optimization
+                    if for_optimization
+                    else self.cache_for_other
+                ),
             ),
         }
         if api_base:

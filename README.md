@@ -99,12 +99,14 @@ produce the same OpenAI model identifier. Leave Gemini `api_base` empty to use
 LiteLLM's provider URL generation. Qwen accepts either `DASHSCOPE_API_KEY` or
 `QWEN_API_KEY` when no key is stored in the model settings.
 
-Two independent DSPy response-cache switches are available in model settings:
+Two independent DSPy response-cache switches are available as service startup
+flags of `python src/main.py`:
 
-- `cache_for_optimization` defaults to `true` and applies to `optim`,
-  `optim_custom`, image prompt optimization, and their model-based metrics.
-- `cache_for_other` defaults to `false` and applies to prediction, judging,
-  parsing, table extraction, and model connection tests.
+- `--cache-for-optimization` / `--no-cache-for-optimization` (default: enabled)
+  applies to `optim`, `optim_custom`, image prompt optimization, and their
+  model-based metrics.
+- `--cache-for-other` / `--no-cache-for-other` (default: disabled) applies to
+  prediction, judging, parsing, table extraction, and model connection tests.
 
 These switches control DSPy's local exact-response cache. They do not enable
 or disable a provider's prompt cache. Calls served by DSPy's response cache are
