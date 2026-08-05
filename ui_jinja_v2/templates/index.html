@@ -106,6 +106,39 @@
   </p>
 </div>
 
+<!-- Recommended prompt template -->
+<div class="card" style="padding:24px 28px;margin-bottom:24px;">
+  <div class="section-head" style="margin-bottom:16px;">
+    <div class="step-num"><i class="fas fa-pen-to-square" style="font-size:.8rem;"></i></div>
+    <div>
+      <div class="section-title">Recommended Prompt Template</div>
+      <div class="section-desc">We recommend using the following template to clearly describe the criteria that the information extraction task should follow.</div>
+    </div>
+  </div>
+
+  <div class="sub-head"><i class="fas fa-code"></i>Template</div>
+  <pre style="background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin:0 0 16px;overflow-x:auto;font-size:.82rem;line-height:1.7;color:var(--ink-900);font-family:Consolas,Monaco,'Courier New',monospace;">Extract [target information] from [source].
+Follow these rules:
+1. [rule 1]
+2. [rule 2]
+...
+Exclude the following:
+1. [exclusion 1]
+2. [exclusion 2]
+...</pre>
+
+  <div class="sub-head"><i class="fas fa-flask"></i>Example</div>
+  <pre style="background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin:0;overflow-x:auto;font-size:.82rem;line-height:1.7;color:var(--ink-900);font-family:Consolas,Monaco,'Courier New',monospace;">Extract clinical information for patient and healthy control groups from biomedical literature.
+Follow these rules:
+1. Preserve full group names exactly as reported.
+2. When extracting age, report values in years (convert units to years when necessary).
+3. When calculating sex percentages, report values rounded to two decimal places.
+4. Keep all extracted values precise and cite the source sentence or table.
+Exclude the following:
+1. Non-human studies.
+2. Review articles and meta-analyses.</pre>
+</div>
+
 <!-- Test data -->
 <div class="card" style="padding:24px 28px;margin-bottom:24px;">
   <div class="section-head">
@@ -193,55 +226,4 @@
   </div>
 </div>
 
-<!-- Performance evaluation datasets -->
-<div class="card" style="padding:24px 28px;">
-  <div class="section-head">
-    <div class="step-num"><i class="fas fa-chart-line" style="font-size:.8rem;"></i></div>
-    <div>
-      <div class="section-title">Datasets used for performance evaluation</div>
-      <div class="section-desc">Ground-truth and benchmark files referenced in the OmniExtract evaluation.</div>
-    </div>
-  </div>
-
-  <div class="download-item">
-    <div class="dl-icon amber"><i class="fas fa-file-excel"></i></div>
-    <div class="dl-body">
-      <div class="dl-name">critical_cooling_rate_truth.xlsx</div>
-      <div class="dl-desc">Ground-truth data used for evaluating critical cooling rate extraction quality.</div>
-    </div>
-    <a class="dl-btn" href="/omniextract/api/download/performance_evaluation_dataset/critical_cooling_rate_truth.xlsx"><i class="fas fa-download"></i>.xlsx</a>
-  </div>
-  <div class="download-item">
-    <div class="dl-icon amber"><i class="fas fa-file-excel"></i></div>
-    <div class="dl-body">
-      <div class="dl-name">ewas_related_publication_list.xlsx</div>
-      <div class="dl-desc">Reference publication list for EWAS-related evaluation tasks.</div>
-    </div>
-    <a class="dl-btn" href="/omniextract/api/download/performance_evaluation_dataset/ewas_related_publication_list.xlsx"><i class="fas fa-download"></i>.xlsx</a>
-  </div>
-  <div class="download-item">
-    <div class="dl-icon amber"><i class="fas fa-file-excel"></i></div>
-    <div class="dl-body">
-      <div class="dl-name">ewas_table_extract_result.xlsx</div>
-      <div class="dl-desc">Extraction result benchmark table for performance comparison.</div>
-    </div>
-    <a class="dl-btn" href="/omniextract/api/download/performance_evaluation_dataset/ewas_table_extract_result.xlsx"><i class="fas fa-download"></i>.xlsx</a>
-  </div>
-  <div class="download-item">
-    <div class="dl-icon amber"><i class="fas fa-file-zipper"></i></div>
-    <div class="dl-body">
-      <div class="dl-name">wiki_recycled_dataset.zip</div>
-      <div class="dl-desc">Packaged dataset collected for wiki-related recycling evaluation.</div>
-    </div>
-    <a class="dl-btn" href="/omniextract/api/download/performance_evaluation_dataset/wiki_recycled_dataset.zip"><i class="fas fa-download"></i>.zip</a>
-  </div>
-  <div class="download-item">
-    <div class="dl-icon amber"><i class="fas fa-file-zipper"></i></div>
-    <div class="dl-body">
-      <div class="dl-name">yidu-s4k_dataset.zip</div>
-      <div class="dl-desc">Dataset bundle used for model performance evaluation.</div>
-    </div>
-    <a class="dl-btn" href="/omniextract/api/download/performance_evaluation_dataset/yidu-s4k_dataset.zip"><i class="fas fa-download"></i>.zip</a>
-  </div>
-</div>
 {% endblock %}

@@ -52,6 +52,36 @@
   </p>
 </div>
 
+<div style="margin-bottom:30px;padding:20px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.05);border-left:4px solid #8b5cf6;">
+  <h3 class="module-title" style="color:#6d28d9;margin-bottom:15px;padding-bottom:8px;border-bottom:3px solid #8b5cf6;">Recommended Prompt Template</h3>
+  <p style="font-size:16px;color:#374151;margin-bottom:15px;line-height:1.6;">
+    We recommend using the following template to clearly describe the criteria that the information extraction task should follow.
+  </p>
+  <div style="background-color:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;padding:15px;margin-bottom:15px;">
+    <pre style="margin:0;font-size:14px;color:#4c1d95;white-space:pre-wrap;font-family:Consolas,Monaco,'Courier New',monospace;line-height:1.7;">Extract [target information] from [source].
+Follow these rules:
+1. [rule 1]
+2. [rule 2]
+...
+Exclude the following:
+1. [exclusion 1]
+2. [exclusion 2]
+...</pre>
+  </div>
+  <h4 style="color:#6d28d9;margin-bottom:8px;font-weight:600;">Example</h4>
+  <div style="background-color:#faf5ff;border:1px solid #e9d5ff;border-radius:8px;padding:15px;">
+    <pre style="margin:0;font-size:14px;color:#4c1d95;white-space:pre-wrap;font-family:Consolas,Monaco,'Courier New',monospace;line-height:1.7;">Extract clinical information for patient and healthy control groups from biomedical literature.
+Follow these rules:
+1. Preserve full group names exactly as reported.
+2. When extracting age, report values in years (convert units to years when necessary).
+3. When calculating sex percentages, report values rounded to two decimal places.
+4. Keep all extracted values precise and cite the source sentence or table.
+Exclude the following:
+1. Non-human studies.
+2. Review articles and meta-analyses.</pre>
+  </div>
+</div>
+
 <div style="margin-bottom:30px;padding:20px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.05);border-left:4px solid #10b981;">
   <h3 class="module-title" style="color:#065f46;margin-bottom:15px;padding-bottom:8px;border-bottom:3px solid #10b981;">Test Data Download</h3>
   
@@ -134,52 +164,4 @@
   </div>
 </div>
 
-<div style="margin-bottom:30px;padding:20px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.05);border-left:4px solid #f59e0b;">
-  <h3 class="module-title" style="color:#92400e;margin-bottom:15px;padding-bottom:8px;border-bottom:3px solid #f59e0b;">Datasets used for performance evaluation</h3>
-
-  <div style="margin-bottom: 15px;">
-    <p style="font-size:16px;color:#374151;margin-bottom:10px;">
-      <strong>critical_cooling_rate_truth.xlsx:</strong> Ground-truth data used for evaluating critical cooling rate extraction quality.
-      <a href="/omniextract/api/download/performance_evaluation_dataset/critical_cooling_rate_truth.xlsx" style="margin-left:10px; background-color:#f59e0b; color:white; padding:4px 10px; border-radius:4px; text-decoration:none; font-size:14px; font-weight:600; display: inline-block;">
-        <i class="fas fa-download" style="margin-right:5px;"></i>Download (.xlsx)
-      </a>
-    </p>
-  </div>
-
-  <div style="margin-bottom: 15px;">
-    <p style="font-size:16px;color:#374151;margin-bottom:10px;">
-      <strong>ewas_related_publication_list.xlsx:</strong> Reference publication list for EWAS-related evaluation tasks.
-      <a href="/omniextract/api/download/performance_evaluation_dataset/ewas_related_publication_list.xlsx" style="margin-left:10px; background-color:#f59e0b; color:white; padding:4px 10px; border-radius:4px; text-decoration:none; font-size:14px; font-weight:600; display: inline-block;">
-        <i class="fas fa-download" style="margin-right:5px;"></i>Download (.xlsx)
-      </a>
-    </p>
-  </div>
-
-  <div style="margin-bottom: 15px;">
-    <p style="font-size:16px;color:#374151;margin-bottom:10px;">
-      <strong>ewas_table_extract_result.xlsx:</strong> Extraction result benchmark table for performance comparison.
-      <a href="/omniextract/api/download/performance_evaluation_dataset/ewas_table_extract_result.xlsx" style="margin-left:10px; background-color:#f59e0b; color:white; padding:4px 10px; border-radius:4px; text-decoration:none; font-size:14px; font-weight:600; display: inline-block;">
-        <i class="fas fa-download" style="margin-right:5px;"></i>Download (.xlsx)
-      </a>
-    </p>
-  </div>
-
-  <div style="margin-bottom: 15px;">
-    <p style="font-size:16px;color:#374151;margin-bottom:10px;">
-      <strong>wiki_recycled_dataset.zip:</strong> Packaged dataset collected for wiki-related recycling evaluation.
-      <a href="/omniextract/api/download/performance_evaluation_dataset/wiki_recycled_dataset.zip" style="margin-left:10px; background-color:#f59e0b; color:white; padding:4px 10px; border-radius:4px; text-decoration:none; font-size:14px; font-weight:600; display: inline-block;">
-        <i class="fas fa-download" style="margin-right:5px;"></i>Download (.zip)
-      </a>
-    </p>
-  </div>
-
-  <div>
-    <p style="font-size:16px;color:#374151;margin-bottom:10px;">
-      <strong>yidu-s4k_dataset.zip:</strong> Dataset bundle used for model performance evaluation.
-      <a href="/omniextract/api/download/performance_evaluation_dataset/yidu-s4k_dataset.zip" style="margin-left:10px; background-color:#f59e0b; color:white; padding:4px 10px; border-radius:4px; text-decoration:none; font-size:14px; font-weight:600; display: inline-block;">
-        <i class="fas fa-download" style="margin-right:5px;"></i>Download (.zip)
-      </a>
-    </p>
-  </div>
-</div>
 {% endblock %}

@@ -467,7 +467,7 @@ def workflow_artifact(request: Request, workflow_id: str, artifact_path: str, to
 
 @router.get("/api/download/{module}/{filename}")
 async def download_file(module: str, filename: str):
-    allowed_modules = {"doc_extraction", "prompt_optimization", "table_extraction", "performance_evaluation_dataset"}
+    allowed_modules = {"doc_extraction", "prompt_optimization", "table_extraction"}
     if module not in allowed_modules or os.path.basename(filename) != filename:
         raise HTTPException(status_code=400, detail="Invalid download path")
     file_path = os.path.abspath(os.path.join(root_dir, "upload_data", module, filename))
