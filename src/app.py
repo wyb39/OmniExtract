@@ -44,7 +44,7 @@ async def start_workflow_workers():
     workflow_router.start_workflow_workers()
 
 
-# The Dash application remains the default GUI entry point.  Do not mount it
-# here: this FastAPI app is also used by the CLI service.
+# The Flask/Jinja GUI (gui/app.py) is the default GUI entry point.
+# Do not mount it here: this FastAPI app is also used by the CLI service.
 class BaseMap(BaseModel):
     data: Dict[str, Any]

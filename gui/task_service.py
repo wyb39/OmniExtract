@@ -1,5 +1,5 @@
 """
-Task service for gui_v2 (Flask/Jinja, no Dash).
+Task service for gui (Flask/Jinja, no Dash).
 
 Handles:
   * launching extraction/parsing/optimization tasks as subprocesses
@@ -14,24 +14,22 @@ It reuses the Dash-free utilities already present in the repo:
   * gui.yml_generation.*  (YAML config writers)
   * src.cli.cli_handler   (the actual task callables)
 
-All gui_v2 run artifacts are stored under  gui_v2/runs/<module>/run_<timestamp>/
+All run artifacts are stored under  gui/runs/<module>/run_<timestamp>/
 """
 import json
 import os
 import sys
 from datetime import datetime
 
-# The legacy gui package uses FLAT imports internally (e.g. gui/call_cli.py does
+# The gui package uses FLAT imports internally (e.g. gui/call_cli.py does
 # `from process_manager import process_manager`), so the gui directory itself
-# must be on sys.path for `gui.call_cli` to load. gui_v2 uses package-qualified
-# imports (`from gui_v2 import ...`) so there is no name collision.
+# must be on sys.path for `gui.call_cli` to load.
 _PROJECT_ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 _GUI_DIR = os.path.join(_PROJECT_ROOT, "gui")
 for _p in (_PROJECT_ROOT, _GUI_DIR):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-# Package-qualified imports (no flat imports) prevent collisions with the legacy gui package.
 from gui.call_cli import create_initial_log, cancel_task, run_task_and_update_log
 from gui.process_manager import process_manager
 from gui.yml_generation.yml_document_parsing import save_document_parsing_config_to_yaml
@@ -47,18 +45,16 @@ from gui.yml_generation.yml_table_parsing import (
 from gui.yml_generation.yml_build_optm_dataset import generate_build_optm_dataset_yml_from_dash_callback
 from gui.yml_generation.yml_model_config import save_model_config_to_yaml
 
-_GUIV2_DIR = os.path.dirname(os.path.abspath(__file__))  # .../gui_v2
-
 
 # ----------------------------------------------------------------------
 # paths
 # ----------------------------------------------------------------------
 def runs_root():
-    return os.path.join(_GUIV2_DIR, "runs")
+    return os.path.join(_GUI_DIR, "runs")
 
 
 def _project_root():
-    return os.path.normpath(os.path.join(_GUIV2_DIR, ".."))
+    return _PROJECT_ROOT
 
 
 def _src_path():

@@ -61,8 +61,7 @@ pip install -r requirements.txt
 ### Start the GUI Service
 After installing dependencies, start the local GUI service:
 ```bash
-cd gui
-python app.py
+python -m gui.app
 ```
 Make sure your virtual environment is activated.
 Then open your browser and navigate to http://127.0.0.1:8050/ to use the tool.
@@ -200,11 +199,10 @@ workspace, and `settings/model_settings_*.json` are ignored by Git. Model
 settings may contain credentials and must be configured locally on each
 deployment.
 
-For Linux server deployment, set a password to encrypt the model `api_key` and expose the service externally:
-First, modify `gui/app.py` to listen on all interfaces by changing the default host to `0.0.0.0` (replace `os.environ.get("HOST", "127.0.0.1")` with `os.environ.get("HOST", "0.0.0.0")`).
+For Linux server deployment, set a password to encrypt the model `api_key` and expose the service externally.
+The GUI already listens on `0.0.0.0` by default, so just set the encryption key and start it:
 ```bash
-cd gui
-OMNI_EXTRACT_ENCRYPTION_KEY=YOUR_PASSWORD python app.py
+OMNI_EXTRACT_ENCRYPTION_KEY=YOUR_PASSWORD python -m gui.app
 ```
 
 ### Use the Command Line and Configuration Files

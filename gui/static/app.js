@@ -1,5 +1,5 @@
 /* ============================================================
-   OmniExtract gui_v2 — shared client behavior (no framework)
+   OmniExtract gui — shared client behavior (no framework)
    ============================================================ */
 (function () {
   "use strict";
