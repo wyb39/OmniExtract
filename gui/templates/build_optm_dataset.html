@@ -1,0 +1,91 @@
+{% extends 'base.html' %}
+{% from '_macros.html' import fields_editor, task_cards %}
+
+{% block content %}
+<div class="page-hero">
+  <div class="hero-icon green"><i class="fas fa-database"></i></div>
+  <div>
+    <h2>Build Optimization Dataset</h2>
+    <p class="hero-desc">Pair parsed documents with curated ground-truth into an optimization dataset
+      (<code>_optim_dataset.json</code>) consumed by Prompt Optimization.</p>
+  </div>
+</div>
+
+<form class="module-container" data-task="build-dataset" data-result="#task-result">
+  <div class="section-container">
+    <div class="section-head"><div><div class="section-title">Task Name</div></div></div>
+    <div class="form-group">
+      <label class="form-label" for="bd-task-name">Task Name</label>
+      <input id="bd-task-name" name="task_name" class="form-input" placeholder="Enter a name for this task">
+    </div>
+  </div>
+
+  <div class="section-container">
+    <div class="section-head"><div><div class="section-title">Required Paths</div></div></div>
+    <div class="form-group">
+      <label class="form-label" for="bd-json-path">JSON Files Path <span class="req-badge">Required</span></label>
+      <input id="bd-json-path" name="json_path" class="form-input" placeholder="path/to/your/json/files">
+      <small class="form-hint">Folder of JSON files produced by Document Parsing. You may add <code>Title</code>/<code>Abstract</code> keys manually.</small>
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="bd-curated">Curated Dataset Path <span class="req-badge">Required</span></label>
+      <input id="bd-curated" name="curated_dataset_path" class="form-input" placeholder="path/to/your/curated/dataset.json">
+      <small class="form-hint">JSON/CSV/TSV/Excel. Must contain a column matching the <strong>Article Field Name</strong> below.</small>
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="bd-save">Save Directory <span class="req-badge">Required</span></label>
+      <input id="bd-save" name="save_directory" class="form-input" placeholder="path/to/save/directory">
+      <small class="form-hint">The built dataset is saved as <code>_optim_dataset.json</code> here.</small>
+    </div>
+  </div>
+
+  <div class="section-container">
+    <div class="section-head"><div><div class="section-title">Fields Configuration</div></div></div>
+    <small class="form-hint" style="display:block;margin-bottom:12px;">Each field becomes a key in <code>_optim_dataset.json</code> and should match your curated dataset column where applicable.</small>
+    {{ fields_editor('bd-fields-container', 'fields', kind='field', add_label='Add Field', with_image=true) }}
+  </div>
+
+  <div class="section-container">
+    <div class="section-head"><div><div class="section-title">Extraction Mode</div></div></div>
+    <div class="form-group">
+      <label class="form-checkbox"><input type="checkbox" name="multiple"> Set true for extracting multiple entities from the document</label>
+    </div>
+  </div>
+
+  <div class="section-container">
+    <div class="section-head"><div><div class="section-title">Article Configuration</div></div></div>
+    <div class="field-grid">
+      <div class="form-group">
+        <label class="form-label" for="bd-article-field">Article Field Name</label>
+        <input id="bd-article-field" name="article_field" class="form-input" value="article_field">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="bd-article-parts">Article Parts to Extract From (Optional)</label>
+        <select id="bd-article-parts" name="article_parts" class="form-select" multiple style="height:auto;min-height:120px;">
+          <option value="Title">Title</option>
+          <option value="Abstract">Abstract</option>
+          <option value="Introduction">Introduction</option>
+          <option value="Method">Method</option>
+          <option value="Result">Result</option>
+          <option value="Discussion">Discussion</option>
+          <option value="Conclusion">Conclusion</option>
+        </select>
+        <small class="form-hint">Hold Ctrl/Cmd to multi-select. If empty, the entire article is used.</small>
+      </div>
+    </div>
+  </div>
+
+  <div class="form-actions">
+    <button type="button" class="btn btn-primary" data-submit><i class="fas fa-play"></i>Start Building Dataset</button>
+    <div id="task-result" style="width:100%;"></div>
+  </div>
+</form>
+
+<div class="module-container" style="margin-top:30px;padding:22px 28px;">
+  <div class="section-head" style="margin-bottom:6px;">
+    <div class="step-num"><i class="fas fa-clock-rotate-left" style="font-size:.8rem;"></i></div>
+    <div><div class="section-title">Recent Build Dataset Tasks</div></div>
+  </div>
+  {{ task_cards(tasks, module_key) }}
+</div>
+{% endblock %}

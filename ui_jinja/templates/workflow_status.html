@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container" style="max-width: 900px; margin: 40px auto;">
+  <div class="card" style="padding: 28px;">
+    <div style="display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap;">
+      <div>
+        <h2 style="margin-top:0;">Workflow status</h2>
+        <p style="color:#64748b;margin-bottom:4px;">Workflow ID: <code>{{ workflow_id }}</code></p>
+        {% if status.workflow_type %}<p style="color:#64748b;margin-top:0;">Type: {{ status.workflow_type }}</p>{% endif %}
+      </div>
+      <span style="display:inline-block;padding:7px 14px;border-radius:999px;background:#eff6ff;color:#1d4ed8;font-weight:600;text-transform:capitalize;">{{ status.status }}</span>
+    </div>
+
+    {% if status.task_name %}<p><strong>Task:</strong> {{ status.task_name }}</p>{% endif %}
+    {% if status.updated_at %}<p style="color:#64748b;"><strong>Last updated:</strong> {{ status.updated_at }}</p>{% endif %}
+
+    {% if status.status == "queued" or status.status == "running" %}
+      <div style="padding:16px;background:#f8fafc;border-radius:8px;">The workflow is still processing. This page refreshes automatically every 5 minutes.</div>
+    {% elif status.status == "completed" %}
+      {% if status.processing_status == "partial" %}
+        <div style="padding:16px;background:#fffbeb;color:#92400e;border-radius:8px;">The workflow completed, but some documents failed.</div>
+      {% else %}
+        <div style="padding:16px;background:#ecfdf5;color:#065f46;border-radius:8px;">The workflow completed successfully.</div>
+      {% endif %}
+      {% if status.failed_documents %}
+        <h3>Failed documents</h3>
+        {% for document in status.failed_documents %}
+          <div style="margin:12px 0;padding:14px;background:#fff7ed;border-radius:8px;">
+            <strong>{{ document.document_id }}</strong>
+            <ul>
+            {% for issue in document.issues %}
+              <li>{{ issue.message }}{% if issue.action %} — {{ issue.action }}{% endif %}</li>
+            {% endfor %}
+            </ul>
+          </div>
+        {% endfor %}
+      {% endif %}
+      {% if status.artifacts %}
+        <h3>Results</h3>
+        <ul>
+        {% for artifact in status.artifacts %}
+          <li><a href="{{ artifact.url }}">Download {{ artifact.name }}</a></li>
+        {% endfor %}
+        </ul>
+      {% else %}
+        <p>The workflow completed, but no downloadable artifact is available yet.</p>
+      {% endif %}
+    {% elif status.status == "failed" %}
+      <div style="padding:16px;background:#fef2f2;color:#991b1b;border-radius:8px;">The workflow failed.</div>
+      {% if status.failed_documents %}
+        <h3>Failed documents</h3>
+        {% for document in status.failed_documents %}
+          <div style="margin:12px 0;padding:14px;background:#fff7ed;border-radius:8px;">
+            <strong>{{ document.document_id }}</strong>
+            <ul>
+            {% for issue in document.issues %}
+              <li>{{ issue.message }}{% if issue.action %} — {{ issue.action }}{% endif %}</li>
+            {% endfor %}
+            </ul>
+          </div>
+        {% endfor %}
+      {% endif %}
+      {% if status.artifacts %}
+        <h3>Results</h3>
+        <ul>
+        {% for artifact in status.artifacts %}
+          <li><a href="{{ artifact.url }}">Download {{ artifact.name }}</a></li>
+        {% endfor %}
+        </ul>
+      {% endif %}
+    {% endif %}
+  </div>
+</div>
+<script>
+  window.setTimeout(function () { window.location.reload(); }, 300000);
+</script>
+{% endblock %}

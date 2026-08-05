@@ -1,0 +1,146 @@
+{# ===== shared Jinja macros for gui ===== #}
+
+{# A single dynamic field block (input/output).
+   kind: "input" | "output" | "field"
+   with_image: whether to include the "image" field type (build dataset) #}
+{% macro field_block(kind="output", with_image=false) %}
+<div class="field-block">
+  <div class="field-block-head">
+    <span class="field-block-title">
+      {% if kind == "input" %}<i class="fas fa-arrow-right-to-bracket"></i>Input Field
+      {% elif kind == "output" %}<i class="fas fa-arrow-up-from-bracket"></i>Output Field
+      {% else %}<i class="fas fa-cube"></i>Field{% endif %}
+    </span>
+    <button type="button" class="delete-button" title="Remove this field">&times;</button>
+  </div>
+  <div class="field-grid">
+    <div class="form-group">
+      <label class="form-label">{{ kind|capitalize }} Field Name</label>
+      <input type="text" class="form-input" data-role="name"
+             placeholder="{{ 'Method' if kind == 'input' else 'output_field' }}">
+    </div>
+    <div class="form-group">
+      <label class="form-label">{{ kind|capitalize }} Field Type</label>
+      <select class="form-select" data-role="type">
+        <option value="str">String</option>
+        <option value="int">Integer</option>
+        <option value="float">Float</option>
+        <option value="bool">Boolean</option>
+        <option value="list">List</option>
+        <option value="literal">Literal</option>
+        <option value="list_literal">List Literal</option>
+        {% if with_image %}<option value="image">Image</option>{% endif %}
+      </select>
+    </div>
+  </div>
+  <div class="form-group">
+    <label class="form-label">{{ kind|capitalize }} Field Description</label>
+    <input type="text" class="form-input" data-role="description"
+           placeholder="Description of this {{ kind }} field">
+  </div>
+  <div class="field-grid">
+    <div><label class="form-checkbox"><input type="checkbox" data-toggle="range"> Add Range Limits</label></div>
+    <div><label class="form-checkbox"><input type="checkbox" data-toggle="literal"> Add Literal List</label></div>
+  </div>
+  <div data-range-container style="display:none">
+    <div class="field-grid" style="margin-top:12px;">
+      <div class="form-group">
+        <label class="form-label">Range Minimum</label>
+        <input type="number" class="form-input" data-role="range-min" placeholder="Min value">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Range Maximum</label>
+        <input type="number" class="form-input" data-role="range-max" placeholder="Max value">
+      </div>
+    </div>
+  </div>
+  <div data-literal-container style="display:none">
+    <div class="form-group" style="margin-top:12px;">
+      <label class="form-label">Literal List (comma separated)</label>
+      <input type="text" class="form-input" data-role="literal-list" placeholder="option1,option2,option3">
+    </div>
+  </div>
+</div>
+{% endmacro %}
+
+{# "Add <Field>" button + container holding one template block #}
+{% macro fields_editor(container_id, fields_key, kind="output", add_label="Add OutputField", with_image=false) %}
+<button type="button" class="btn btn-ghost btn-sm" style="margin-bottom:15px;"
+        data-add="{{ container_id }}" data-field-kind="{{ kind }}">
+  <i class="fas fa-plus"></i>{{ add_label }}
+</button>
+<div id="{{ container_id }}" data-fields="{{ fields_key }}" data-field-kind="{{ kind }}">
+  {{ field_block(kind=kind, with_image=with_image) }}
+</div>
+{% endmacro %}
+
+{# ----- render a run's stored data dict as a definition list ----- #}
+{% macro render_data(data) %}
+<dl>
+  {% for k, v in (data or {}).items() %}
+    <dt>{{ key_display(k) }}</dt>
+    {% if v is mapping %}
+      <dd><code>{{ v | tojson }}</code></dd>
+    {% elif v is sequence and v is not string and v and v[0] is mapping %}
+      <dd>
+        <div class="fields-list">
+          {% for f in v %}
+            <div class="field-row">
+              <strong>{{ f.get('name', '?') }}</strong>
+              <span class="text-muted">[{{ f.get('field_type', 'str') }}]</span>
+              {% if f.get('description') %} — {{ f['description'] }}{% endif %}
+              {% if f.get('range_min') is not none %} · range {{ f['range_min'] }}~{{ f['range_max'] }}{% endif %}
+              {% if f.get('literal_list') %} · literal: {{ f['literal_list'] | join(',') if f['literal_list'] is sequence else f['literal_list'] }}{% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      </dd>
+    {% elif v is sequence and v is not string %}
+      <dd>{{ v | join(', ') }}</dd>
+    {% elif v is boolean %}
+      <dd>{{ 'Yes' if v else 'No' }}</dd>
+    {% else %}
+      <dd>{{ v if v is not none and v != '' else '—' }}</dd>
+    {% endif %}
+  {% endfor %}
+</dl>
+{% endmacro %}
+
+{# ----- a list of recent task cards for a module ----- #}
+{% macro task_cards(tasks, module_key) %}
+{% if not tasks %}
+  <p class="no-tasks">No recent tasks yet. Run a task above and it will appear here.</p>
+{% endif %}
+{% for t in tasks %}
+<div class="task-card">
+  <div class="task-card-head">
+    <div>
+      <div class="task-card-name">{{ t.name }}</div>
+      <div class="task-card-time">Created: {{ t.create_time }}</div>
+    </div>
+    <span class="status-pill {{ t.status }}">{{ t.status }}</span>
+    <div class="task-card-actions">
+      {% if t.status == 'running' %}
+      <button type="button" class="btn btn-danger btn-sm" data-cancel="{{ t.config_path }}">
+        <i class="fas fa-stop"></i>Cancel task
+      </button>
+      {% endif %}
+      {% if t.log_exists %}
+      <button type="button" class="btn btn-secondary btn-sm" data-log="{{ t.log_path }}" data-log-name="{{ t.log_path | basename }}">
+        <i class="fas fa-file-lines"></i>View log
+      </button>
+      {% endif %}
+      <button type="button" class="btn btn-ghost btn-sm" data-use-config="{{ t.config_path }}" data-module="{{ module_key }}">
+        <i class="fas fa-arrow-up-from-bracket"></i>Use this config
+      </button>
+      <button type="button" class="icon-btn" data-task-toggle="task-body-{{ t.id }}" title="Details">
+        <i class="fas fa-chevron-down"></i>
+      </button>
+    </div>
+  </div>
+  <div class="task-card-body" id="task-body-{{ t.id }}" style="display:none;">
+    {{ render_data(t.data) }}
+  </div>
+</div>
+{% endfor %}
+{% endmacro %}

@@ -1,0 +1,49 @@
+# Workflow Configuration for Prompt Optimization (server-side paths)
+# End-to-end: source zip -> parse -> build optimization dataset -> optimize prompt.
+# Mirrors the /api/run_workflow_prompt_optimization endpoint when called with
+# source_zip_path and dataset_file_path.
+# Run with: python run_cli.py workflow_prompt_optimization path/to/this/config.yml
+
+# === INPUT FILES (server paths, not uploads) ===
+zip_file_path: "/abs/path/to/source.zip"      # zip of PDF/XML source documents
+dataset_file_path: "/abs/path/to/dataset.json"  # curated dataset for optimization
+file_type: "PDF"  # PDF | scienceDirect | PMC
+
+# === WORKSPACE (optional) ===
+base_path: ""
+task_name: ""
+contact_email: ""
+
+# === PARSING MODE ===
+convert_mode: "byPart"  # byPart | wholeDoc
+# inputFields naming rules:
+#   byPart   -> subset of: Introduction, Method, Result, Discussion, Conclusion
+#   wholeDoc -> exactly one field named "Document"
+inputFields:
+  - name: "Introduction"
+    field_type: "str"
+    description: "Introduction section of the article"
+  - name: "Method"
+    field_type: "str"
+    description: "Method section of the article"
+
+# === OUTPUT FIELDS (entities the optimized prompt should extract) ===
+outputFields:
+  - name: "extracted_info"
+    field_type: "str"  # str, int, float, bool, list, literal, image
+    description: "Information to extract"
+
+# === PROMPT & OPTIMIZATION SETTINGS ===
+# Replace {Introduction}, {Method}, {extracted_info} with your actual field names
+initial_prompt: |
+  Given the {Introduction} and {Method}, extract the {extracted_info}. Rules: 1. xxxx 2. xxxx
+demos: 1  # number of few-shot examples to optimize
+article_field: "article_field"  # column name in dataset_file_path identifying the source article
+multiple_entities: false  # true to optimize for list-of-entities extraction
+
+# === USAGE INSTRUCTIONS ===
+# 1. Set zip_file_path and dataset_file_path to existing server-side files
+# 2. dataset_file_path must contain curated rows keyed by the output fields
+# 3. Define inputFields/outputFields and initial_prompt
+# 4. Run: python run_cli.py workflow_prompt_optimization src/yml/workflow/workflow_prompt_optimization_config.yml
+# 5. Outputs an optimization_config.zip usable by workflow_doc_extraction_optimized

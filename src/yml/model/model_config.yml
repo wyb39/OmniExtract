@@ -18,7 +18,7 @@ api_base: ""  # API base URL (string)
 # - ollama: http://localhost:11434
 # - qwen: https://dashscope.aliyuncs.com/compatible-mode/v1
 # - deepseek: https://api.deepseek.com
-# - gemini: https://generativelanguage.googleapis.com/v1beta
+# - gemini: provider default (leave api_base empty)
 # - openrouter: https://openrouter.ai/api/v1
 # - anthropic: https://api.anthropic.com
 # - sglang: http://localhost:30000
@@ -51,7 +51,16 @@ top_k: null  # Top-k sampling parameter (positive integer or null)
 # Controls diversity by considering only the top k tokens
 
 min_p: null  # Minimum probability threshold (float between 0.0 and 1.0, or null)
-# Minimum probability for a token to be considered
+# Supported for vllm, ollama, sglang, openrouter and custom
+
+# === DSPY RESPONSE CACHE ===
+cache_for_optimization: true  # Cache identical calls during prompt optimization
+cache_for_other: false  # Cache identical calls outside prompt optimization
+
+# === THINKING / REASONING ===
+thinking_enabled: false  # Enable provider-supported thinking controls
+reasoning_effort: "medium"  # low, medium, or high
+thinking_budget_tokens: null  # Optional provider-specific thinking token budget
 
 # === USAGE INSTRUCTIONS ===
 # 1. Update model_name to your desired model

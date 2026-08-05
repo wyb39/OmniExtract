@@ -3,11 +3,11 @@ from loguru import logger
 from typing import Literal
 import os
 import json
-from model import (
+from src.model.model import (
     get_model_settings,
     ModelSettings,
 )
-from service import (
+from src.service.service import (
     optim,
     optim_custom,
     pred,
@@ -18,14 +18,14 @@ from service import (
     extract_table_service,
     build_optm_set,
 )
-from params import (
+from src.model.params import (
     PathSettings,
     TableExtractionParams,
     ExtractTableServiceParams,
     BuildTrainSetParams,
 )
-from optimUtil import OptimSettings
-from evalUtil import PredictionSettings, PredTrainedSettings
+from src.utils.optimUtil import OptimSettings
+from src.utils.evalUtil import PredictionSettings, PredTrainedSettings
 
 router = APIRouter()
 
@@ -45,16 +45,8 @@ def get_model_settings_api(
 @router.post("/api/modify_model")
 def modify_model(data: ModelSettings):
     def save_current_model_settings(model_instance, data):
-        model_instance.model_name = data.model_name
-        model_instance.model_type = data.model_type
-        model_instance.api_key = data.api_key
-        model_instance.api_base = data.api_base
-        model_instance.model_usage = data.model_usage
-        model_instance.temperature = data.temperature
-        model_instance.max_tokens = data.max_tokens
-        model_instance.top_p = data.top_p
-        model_instance.top_k = data.top_k
-        model_instance.min_p = data.min_p
+        for field_name in data.model_fields_set:
+            setattr(model_instance, field_name, getattr(data, field_name))
         model_instance.setting_status = True
         message = model_instance.save_model_settings()
         return message
@@ -74,8 +66,7 @@ def modify_model(data: ModelSettings):
 async def optimapi(data: OptimSettings):
     try:
         logger.info(f"optim data:{data}")
-        optim(data)
-        return {"message": "optim completed"}
+        return optim(data)
     except Exception as e:
         logger.info(f"Exception optim error:{e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -85,8 +76,7 @@ async def optimapi(data: OptimSettings):
 async def optimapi_custom(data: OptimSettings):
     try:
         logger.info(f"optim data:{data}")
-        optim_custom(data)
-        return {"message": "optim completed"}
+        return optim_custom(data)
     except Exception as e:
         logger.info(f"Exception optim error:{e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -116,8 +106,11 @@ async def predapi(data: PredTrainedSettings):
         prompt_dir = os.path.join(data.load_dir, "optim_prompt.json")
         if not os.path.exists(prompt_dir):
             raise HTTPException(status_code=500, detail="prompt.json not found")
-        pred(prediction_settings, prompt_dir=prompt_dir, output_file=data.output_file)
-        return {"message": "prediction completed"}
+        return pred(
+            prediction_settings,
+            prompt_dir=prompt_dir,
+            output_file=data.output_file,
+        )
     except Exception as e:
         logger.info(f"Exception pred error:{e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -126,8 +119,7 @@ async def predapi(data: PredTrainedSettings):
 @router.post("/api/pred_original")
 async def predapi_original(data: PredictionSettings):
     try:
-        pred(data)
-        return {"message": "prediction completed"}
+        return pred(data)
     except Exception as e:
         logger.info(f"Exception pred error:{e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -143,8 +135,19 @@ def test():
 async def file_to_md_api(data: PathSettings):
     try:
         logger.info(f"file_to_md data: {data}")
-        result = file_to_md(data.folder_path, data.save_path, data.file_type)
-        return {"message": "file_to_md completed", "result": result}
+        result = file_to_md(
+            data.folder_path,
+            data.save_path,
+            data.file_type,
+        )
+        return {
+            "message": "file_to_md completed",
+            "result": result,
+            "processing_report": os.path.join(
+                data.save_path,
+                "processing_report.json",
+            ),
+        }
     except Exception as e:
         logger.info(f"Exception file_to_md error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -166,7 +169,10 @@ async def file_to_json_api(data: PathSettings):
     try:
         logger.info(f"file_to_json data: {data}")
         result = file_to_json(
-            data.folder_path, data.save_path, data.file_type, data.convert_mode
+            data.folder_path,
+            data.save_path,
+            data.file_type,
+            data.convert_mode,
         )
         return {"message": "file_to_json completed", "result": result}
     except Exception as e:

@@ -1,0 +1,32 @@
+# Workflow Configuration for Table Extraction (server-side zip path)
+# End-to-end: source zip -> parse tables -> extract table info. Mirrors the
+# /api/run_workflow_table_extraction endpoint when called with source_zip_path.
+# Run with: python run_cli.py workflow_table_extraction path/to/this/config.yml
+
+# === INPUT FILES (server paths, not uploads) ===
+zip_file_path: "/abs/path/to/source.zip"  # zip of tabular files (xlsx/csv/tsv) or non-tabular (PDF)
+file_type: "PDF"  # non-tabular source format, e.g. PDF | xlsx | csv | tsv
+
+# === WORKSPACE (optional) ===
+base_path: ""
+task_name: ""
+contact_email: ""
+
+# === OUTPUT FIELDS (columns to extract from each table) ===
+outputFields:
+  - name: "extracted_info"
+    field_type: "str"  # str, int, float, bool, list, literal, image
+    description: "Information to extract from each table"
+
+# === PROMPTS ===
+classify_prompt: ""  # prompt used to classify tables/rows
+extract_prompt: ""   # prompt used to extract the output fields
+
+# === PROCESSING SETTINGS ===
+threads: 6
+
+# === USAGE INSTRUCTIONS ===
+# 1. Set zip_file_path to an existing server-side zip of source files
+# 2. Set file_type to match the source format inside the zip
+# 3. Define outputFields and the classify/extract prompts
+# 4. Run: python run_cli.py workflow_table_extraction src/yml/workflow/workflow_table_extraction_config.yml

@@ -1,0 +1,50 @@
+# Workflow Configuration for Document Extraction (server-side zip path)
+# End-to-end: source zip -> parse -> extract. Mirrors the
+# /api/run_workflow_doc_extraction endpoint when called with source_zip_path.
+# Run with: python run_cli.py workflow_doc_extraction path/to/this/config.yml
+
+# === INPUT FILES (server paths, not uploads) ===
+zip_file_path: "/abs/path/to/source.zip"  # zip of PDF/XML files
+file_type: "PDF"  # PDF | scienceDirect | PMC (matches the document type inside the zip)
+
+# === WORKSPACE (optional) ===
+# Leave base_path empty to auto-create one under process/. Set it to pin a location.
+base_path: ""
+task_name: ""  # optional label; defaults to the generated workflow_id
+contact_email: ""  # optional; sends a notification when set
+
+# === PARSING MODE ===
+convert_mode: "byPart"  # byPart | wholeDoc
+# inputFields naming depends on convert_mode:
+#   byPart   -> names must be a subset of: Introduction, Method, Result, Discussion, Conclusion
+#   wholeDoc -> exactly one field named "Document"
+inputFields:
+  - name: "Introduction"
+    field_type: "str"
+    description: "Introduction section of the article"
+  - name: "Method"
+    field_type: "str"
+    description: "Method section of the article"
+
+# === OUTPUT FIELDS (entities to extract) ===
+outputFields:
+  - name: "extracted_info"
+    field_type: "str"  # str, int, float, bool, list, literal, image
+    description: "Information to extract from the article sections"
+
+# === PROMPT CONFIGURATION ===
+# Replace {Introduction}, {Method}, {extracted_info} with your actual field names
+initial_prompt: |
+  Given the {Introduction} and {Method}, extract the {extracted_info}. Rules: 1. xxxx 2. xxxx
+
+# === EXTRACTION SETTINGS ===
+judging_mode: "confidence"  # confidence | score | "" (no judgement)
+threads: 6
+multiple_entities: false  # true to extract a list of entities per input
+
+# === USAGE INSTRUCTIONS ===
+# 1. Set zip_file_path to an existing server-side zip of source documents
+# 2. Set file_type to match the documents inside the zip
+# 3. Choose convert_mode and define inputFields accordingly
+# 4. Define outputFields and initial_prompt for your extraction task
+# 5. Run: python run_cli.py workflow_doc_extraction src/yml/workflow/workflow_doc_extraction_config.yml

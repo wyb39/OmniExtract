@@ -5,11 +5,17 @@ from pydantic import BaseModel
 from fastapi import FastAPI
 
 from fastapi.middleware.cors import CORSMiddleware
-from router import routerTest
-import baseUtil
+from fastapi.staticfiles import StaticFiles
+from src.router import routerTest
+from src.router import ui_router
+from src.router import ui_router_v2
+from src.router import workflow_router
+from src.common import baseUtil
 
 
-dist_dir = os.path.join(baseUtil.get_root_path(), "gui")
+root_dir = os.path.abspath(baseUtil.get_root_path())
+dist_dir = os.path.join(root_dir, "gui")
+assets_dir = os.path.join(dist_dir, "assets")
 print(f'dist_dir:{dist_dir}')
 
 app = FastAPI(docs_url=None)
@@ -21,6 +27,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(routerTest.router)
-# app.mount("/",StaticFiles(directory=dist_dir),name="static")
+# Expose the same API under the prefix expected by the Jinja pages while
+# retaining the unprefixed routes for existing clients.
+app.include_router(routerTest.router, prefix="/omniextract")
+app.include_router(workflow_router.router, prefix="/omniextract")
+
+app.mount("/omniextract/assets", StaticFiles(directory=assets_dir), name="omniextract-assets")
+app.include_router(ui_router.root_router)
+app.include_router(ui_router.router, prefix="/omniextract")
+# Redesigned UI preview (ui_jinja_v2) served alongside the original UI.
+app.include_router(ui_router_v2.router, prefix="/omniextract/v2")
+
+
+@app.on_event("startup")
+async def start_workflow_workers():
+    workflow_router.start_workflow_workers()
+
+
+# The Flask/Jinja GUI (gui/app.py) is the default GUI entry point.
+# Do not mount it here: this FastAPI app is also used by the CLI service.
 class BaseMap(BaseModel):
     data: Dict[str, Any]

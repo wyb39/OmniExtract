@@ -14,6 +14,11 @@ def generate_model_config_yaml(
     top_p: Optional[float] = None,
     top_k: Optional[int] = None,
     min_p: Optional[float] = None,
+    cache_for_optimization: bool = True,
+    cache_for_other: bool = False,
+    thinking_enabled: bool = False,
+    reasoning_effort: str = "medium",
+    thinking_budget_tokens: Optional[int] = None,
     output_path: Optional[str] = None,
 ) -> str:
     """
@@ -40,7 +45,7 @@ def generate_model_config_yaml(
     config = {
         "# Model Configuration Template": "",
         "# Copy this file and modify according to your needs": "",
-        "# This file contains the configuration for ModelSettings class as defined in src/model.py": "",
+        "# This file contains the configuration for ModelSettings class as defined in src/model/model.py": "",
         "# === MODEL IDENTIFICATION ===": "",
         "# Define the model name and provider type": "",
         "model_name": model_name,
@@ -55,7 +60,7 @@ def generate_model_config_yaml(
         "# - ollama: http://localhost:11434": "",
         "# - qwen: https://dashscope.aliyuncs.com/compatible-mode/v1": "",
         "# - deepseek: https://api.deepseek.com": "",
-        "# - gemini: https://generativelanguage.googleapis.com/v1beta": "",
+        "# - gemini: provider default (leave api_base empty)": "",
         "# - anthropic: https://api.anthropic.com": "",
         "# - sglang: http://localhost:30000": "",
         "# - custom: [User provided URL]": "",
@@ -85,7 +90,22 @@ def generate_model_config_yaml(
         "# Controls diversity by considering only the top k tokens": "",
         "min_p": min_p if min_p is not None else "null",
         "# Minimum probability threshold (float between 0.0 and 1.0, or null)": "",
-        "# Minimum probability for a token to be considered": "",
+        "# Supported for vllm, ollama, sglang, openrouter and custom": "",
+        "# === DSPY RESPONSE CACHE ===": "",
+        "cache_for_optimization": cache_for_optimization,
+        "# Reuse identical DSPy requests during prompt optimization": "",
+        "cache_for_other": cache_for_other,
+        "# Reuse identical DSPy requests outside prompt optimization": "",
+        "# === THINKING / REASONING ===": "",
+        "thinking_enabled": thinking_enabled,
+        "reasoning_effort": reasoning_effort,
+        "# Valid values: low, medium, high": "",
+        "thinking_budget_tokens": (
+            thinking_budget_tokens
+            if thinking_budget_tokens is not None
+            else "null"
+        ),
+        "# Optional provider-specific thinking token budget": "",
         "# === USAGE INSTRUCTIONS ===": "",
         "# 1. Update model_name to your desired model": "",
         "# 2. Set model_type according to your provider": "",
@@ -136,6 +156,11 @@ def extract_model_config_from_callback(
     top_p: Optional[float] = None,
     top_k: Optional[int] = None,
     min_p: Optional[float] = None,
+    cache_for_optimization: bool = True,
+    cache_for_other: bool = False,
+    thinking_enabled: bool = False,
+    reasoning_effort: str = "medium",
+    thinking_budget_tokens: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
     Extract data from model configuration form callback function
@@ -168,6 +193,11 @@ def extract_model_config_from_callback(
         "top_p": top_p if top_p is not None else None,
         "top_k": top_k if top_k is not None else None,
         "min_p": min_p if min_p is not None else None,
+        "cache_for_optimization": cache_for_optimization,
+        "cache_for_other": cache_for_other,
+        "thinking_enabled": thinking_enabled,
+        "reasoning_effort": reasoning_effort,
+        "thinking_budget_tokens": thinking_budget_tokens,
     }
 
     return config
@@ -184,6 +214,11 @@ def save_model_config_to_yaml(
     top_p: Optional[float] = None,
     top_k: Optional[int] = None,
     min_p: Optional[float] = None,
+    cache_for_optimization: bool = True,
+    cache_for_other: bool = False,
+    thinking_enabled: bool = False,
+    reasoning_effort: str = "medium",
+    thinking_budget_tokens: Optional[int] = None,
     output_dir: str = "assets/yml",
     filename: str | None = None,
 ) -> str:
@@ -227,6 +262,11 @@ def save_model_config_to_yaml(
         top_p=top_p,
         top_k=top_k,
         min_p=min_p,
+        cache_for_optimization=cache_for_optimization,
+        cache_for_other=cache_for_other,
+        thinking_enabled=thinking_enabled,
+        reasoning_effort=reasoning_effort,
+        thinking_budget_tokens=thinking_budget_tokens,
         output_path=output_path,
     )
 

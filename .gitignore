@@ -1,0 +1,19 @@
+.venv/
+tmp/
+venv_sync_freeze.txt
+pdf_parsing_experiment/test_pdfs/
+# Experimental PDF parser workspace is maintained locally and is not tracked.
+pdf_parsing_experiment/
+__pycache__/
+*.py[cod]
+
+# Local workflow output and experimental error-handling code are not source.
+process/
+error_handling_experiment/
+
+# Model settings can contain API endpoints and credentials.  Keep every local
+# usage profile out of Git, while retaining settings/README.md.
+settings/model_settings_*.json
+
+# Local production-integration regression tests are not distributed.
+/tests/

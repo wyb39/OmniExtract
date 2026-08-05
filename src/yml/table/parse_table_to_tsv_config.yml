@@ -10,7 +10,7 @@ save_folder_path: "D:/path/to/save/results"  # Replace with the folder path to s
 # File format configuration Note: the non-tabular file format is not supported well now.
 # Optional values: 'PDF', 'scienceDirect', 'PMC', 'Arxiv', default is None (for PDF)
 non_tabular_file_format: "PDF"
-  
+
 # Usage Instructions:
 # 1. Set file_folder_path to the folder path containing source files with tables to parse
 # 2. Set save_folder_path to the folder path where parsed TSV files will be saved

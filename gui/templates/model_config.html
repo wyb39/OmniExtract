@@ -1,0 +1,252 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="page-hero">
+  <div class="hero-icon"><i class="fas fa-sliders"></i></div>
+  <div>
+    <h2>Model Configuration</h2>
+    <p class="hero-desc">Connect OmniExtract to an LLM provider. All modules call the models configured here —
+      set this up once before running any extraction. Review the currently saved settings below, then edit and save new ones.</p>
+  </div>
+</div>
+
+<div class="card" style="padding:18px 28px;margin-bottom:24px;">
+  <div class="section-head" style="margin-bottom:0;align-items:center;cursor:pointer;" onclick="toggleSavedSettings()">
+    <div class="step-num"><i class="fas fa-eye" style="font-size:.8rem;"></i></div>
+    <div>
+      <div class="section-title">Current Saved Settings</div>
+      <div class="section-desc">Switch tabs to inspect the model currently saved for each usage role (API keys are never displayed).</div>
+    </div>
+    <button type="button" class="icon-btn" id="saved-settings-toggle" aria-label="Collapse saved settings">
+      <i class="fas fa-chevron-up"></i>
+    </button>
+  </div>
+
+  <div id="saved-settings-body" style="margin-top:14px;">
+    <div class="tabs" style="padding:0;">
+      <button type="button" class="tab-button active" onclick="openTab('main')">Main</button>
+      <button type="button" class="tab-button" onclick="openTab('prompt_generation')">Prompt Generation</button>
+      <button type="button" class="tab-button" onclick="openTab('judge')">Judge</button>
+      <button type="button" class="tab-button" onclick="openTab('coder')">Coder</button>
+    </div>
+    <div id="tab-content" class="config-item" style="margin-top:12px;border:none;padding:0;">
+      <div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Loading...</div>
+    </div>
+  </div>
+</div>
+
+<form id="model-config-form" class="module-container">
+  <div class="section-container">
+    <div class="section-head" style="margin-bottom:0;">
+      <div class="step-num"><i class="fas fa-pen" style="font-size:.8rem;"></i></div>
+      <div><div class="section-title">Edit &amp; Save a Model</div>
+        <div class="section-desc">Fill in the sections below, choose the usage role, then save or test the connection.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-container">
+    <div class="section-head"><div><div class="section-title">Model Identification</div></div></div>
+    <div class="field-grid">
+      <div class="form-group">
+        <label class="form-label" for="model-name">Model Name <span class="req-badge">Required</span></label>
+        <input id="model-name" name="model_name" class="form-input" placeholder="gpt-4.1">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="model-type">Model Type <span class="req-badge">Required</span></label>
+        <select id="model-type" name="model_type" class="form-select">
+          <option value="openai">OpenAI</option><option value="vllm">vLLM</option>
+          <option value="ollama">Ollama</option><option value="qwen">Qwen</option>
+          <option value="deepseek">DeepSeek</option><option value="gemini">Gemini</option>
+          <option value="anthropic">Anthropic</option><option value="openrouter">OpenRouter</option>
+          <option value="sglang">SGLang</option><option value="custom">Custom (OpenAI Compatible)</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-container">
+    <div class="section-head"><div><div class="section-title">API Configuration</div></div></div>
+    <div class="field-grid">
+      <div class="form-group">
+        <label class="form-label" for="api-base">API Base URL <span class="opt-badge">Optional</span></label>
+        <input id="api-base" name="api_base" class="form-input" placeholder="https://api.openai.com/v1">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="api-key">API Key <span class="opt-badge">Optional</span></label>
+        <input id="api-key" name="api_key" type="password" class="form-input" placeholder="YOUR-API-KEY">
+      </div>
+    </div>
+    <div class="help-text-container">
+      <p class="help-text-title"><i class="fas fa-key"></i> API Key Information:</p>
+      <ul class="help-text-list">
+        <li>API Keys are encrypted and stored in configuration files by default.</li>
+        <li>You can also leave the API Key field empty and use the environment variable like OPENAI_API_KEY instead.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="section-container">
+    <div class="section-head"><div><div class="section-title">Model Usage</div></div></div>
+    <div class="form-group">
+      <label class="form-label" for="model-usage">Model Usage Type <span class="req-badge">Required</span></label>
+      <select id="model-usage" name="model_usage" class="form-select">
+        <option value="main">Main</option>
+        <option value="prompt_generation">Prompt Generation</option>
+        <option value="judge">Judge</option>
+        <option value="coder">Coder</option>
+      </select>
+    </div>
+    <div class="help-text-container">
+      <p class="help-text-title"><i class="fas fa-circle-info"></i> Option Descriptions:</p>
+      <ul class="help-text-list">
+        <li>main: Primary model for general tasks (fallback for prompt_generation/judge/coder if not specified).</li>
+        <li>prompt_generation: Model for generating prompts.</li>
+        <li>judge: Model for evaluation and scoring.</li>
+        <li>coder: Model for code generation and programming tasks.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="section-container">
+    <div class="section-head"><div><div class="section-title">Sampling Parameters</div></div></div>
+    <div class="field-grid">
+      <div class="form-group">
+        <label class="form-label" for="temperature">Temperature</label>
+        <input id="temperature" name="temperature" type="number" class="form-input" min="0" max="2" step="0.1" value="0.0">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="max-tokens">Max Tokens</label>
+        <input id="max-tokens" name="max_tokens" type="number" class="form-input" min="1" value="2500">
+      </div>
+    </div>
+    <div class="field-grid">
+      <div class="form-group">
+        <label class="form-label" for="top-p">Top-p <span class="opt-badge">Optional</span></label>
+        <input id="top-p" name="top_p" type="number" class="form-input" min="0" max="1" step="0.01" placeholder="0.0-1.0 or leave empty">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="top-k">Top-k <span class="opt-badge">Optional</span></label>
+        <input id="top-k" name="top_k" type="number" class="form-input" min="1" placeholder="Positive integer or leave empty">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="min-p">Min-p <span class="opt-badge">Optional</span></label>
+        <input id="min-p" name="min_p" type="number" class="form-input" min="0" max="1" step="0.01" placeholder="0.0-1.0 or leave empty">
+      </div>
+    </div>
+  </div>
+
+  <div class="form-actions">
+    <button type="button" class="btn btn-primary" id="model-save-btn"><i class="fas fa-floppy-disk"></i>Save Configuration</button>
+    <button type="button" class="btn btn-secondary" id="test-connection-btn"><i class="fas fa-plug"></i>Test Connection</button>
+    <div id="config-status" style="width:100%;"></div>
+  </div>
+</form>
+
+{% block scripts %}
+<script>
+function openTab(usageType) {
+  document.querySelectorAll('.tab-button').forEach(function (btn) {
+    btn.classList.toggle('active', btn.textContent.trim().toLowerCase().replace(/\s+/g,'_') === usageType);
+  });
+  loadConfig(usageType);
+}
+function setSavedSettingsCollapsed(collapsed) {
+  document.getElementById('saved-settings-body').style.display = collapsed ? 'none' : '';
+  var t = document.getElementById('saved-settings-toggle');
+  t.querySelector('i').style.transform = collapsed ? 'rotate(180deg)' : '';
+}
+function toggleSavedSettings() {
+  var body = document.getElementById('saved-settings-body');
+  setSavedSettingsCollapsed(body.style.display !== 'none');
+}
+function renderConfigCard(data, usageType) {
+  var c = document.getElementById('tab-content');
+  var hidden = ['api_key', 'setting_status'];
+  var keys = data ? Object.keys(data).filter(function (k) { return hidden.indexOf(k) === -1; }) : [];
+  if (!data || data.setting_status === false) {
+    var role = usageType.replace(/_/g, ' ');
+    var note = usageType !== 'main' ? '<p style="margin-top:4px;">Calls for this role will follow the <strong>Main</strong> model settings.</p>' : '';
+    c.innerHTML = '<div class="alert alert-warning" style="margin-top:0;"><i class="fas fa-triangle-exclamation"></i><div><h4>Model not configured</h4><p>No model saved for the "' + role + '" role yet.</p>' + note + '</div></div>';
+    return;
+  }
+  if (!keys.length) { c.innerHTML = '<p class="no-tasks">No configuration available for this usage type.</p>'; return; }
+  var html = '<div class="config-items">';
+  keys.forEach(function (k) {
+    var dk = k.replace(/_/g, ' ').replace(/\b\w/g, function (l) { return l.toUpperCase(); });
+    var v = data[k] === null ? 'Not set' : data[k];
+    html += '<div class="config-item"><div class="config-item-key">' + dk + '</div><div class="config-item-value">' + v + '</div></div>';
+  });
+  c.innerHTML = html + '</div>';
+}
+function loadConfig(usageType) {
+  var c = document.getElementById('tab-content');
+  c.innerHTML = '<div class="loading-spinner"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
+  fetch('/api/model/settings?model_usage=' + encodeURIComponent(usageType))
+    .then(function (r) { return r.json(); })
+    .then(function (data) { renderConfigCard(data, usageType); })
+    .catch(function (e) { c.innerHTML = '<div class="status-message status-error">Error: ' + e + '</div>'; });
+}
+
+// Save -> /api/model/modify (custom handler, not the generic data-submit)
+document.getElementById('model-save-btn').addEventListener('click', function () {
+  var form = document.getElementById('model-config-form');
+  var payload = {};
+  ['model_name','model_type','api_base','api_key','model_usage'].forEach(function (k) {
+    payload[k] = form.querySelector('[name="' + k + '"]').value;
+  });
+  payload.temperature = parseFloat(form.querySelector('[name="temperature"]').value);
+  payload.max_tokens = parseInt(form.querySelector('[name="max_tokens"]').value, 10);
+  ['top_p','top_k','min_p'].forEach(function (k) {
+    var raw = form.querySelector('[name="' + k + '"]').value;
+    if (raw === '') { payload[k] = null; }
+    else if (k === 'top_k') { payload[k] = parseInt(raw, 10); }
+    else { payload[k] = parseFloat(raw); }
+  });
+  var status = document.getElementById('config-status');
+  var b = this; var orig = b.innerHTML; b.disabled = true; b.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+  fetch('/api/model/modify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+    .then(function (r) { return r.json(); })
+    .then(function (j) {
+      if (j.ok) {
+        status.innerHTML = '<div class="status-message status-success">Configuration saved successfully!<br><small>YAML: ' + (j.yaml_path || '') + '</small></div>';
+        var active = document.querySelector('.tab-button.active');
+        if (active) loadTabByName(active.textContent.trim().toLowerCase().replace(/\s+/g, '_'));
+      } else {
+        status.innerHTML = '<div class="status-message status-error">Save failed: ' + (j.error || 'unknown error') + '</div>';
+      }
+    })
+    .catch(function (err) { status.innerHTML = '<div class="status-message status-error">Request failed: ' + err + '</div>'; })
+    .finally(function () { b.disabled = false; b.innerHTML = orig; });
+});
+
+function loadTabByName(n) { openTab(n); }
+
+document.getElementById('test-connection-btn').addEventListener('click', function () {
+  var form = document.getElementById('model-config-form');
+  var b = this; var status = document.getElementById('config-status');
+  var payload = {};
+  ['model_name','model_type','api_base','api_key','model_usage'].forEach(function (k) {
+    payload[k] = form.querySelector('[name="' + k + '"]').value;
+  });
+  payload.temperature = parseFloat(form.querySelector('[name="temperature"]').value);
+  payload.max_tokens = parseInt(form.querySelector('[name="max_tokens"]').value, 10);
+  ['top_p','top_k','min_p'].forEach(function (k) {
+    var raw = form.querySelector('[name="' + k + '"]').value;
+    payload[k] = raw === '' ? null : (k === 'top_k' ? parseInt(raw,10) : parseFloat(raw));
+  });
+  var orig = b.innerHTML; b.disabled = true; b.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing...';
+  fetch('/api/model/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+    .then(function (r) { return r.json(); })
+    .then(function (j) {
+      if (j.ok) status.innerHTML = '<div class="status-message status-success">Success! Response: ' + JSON.stringify(j.result) + '</div>';
+      else status.innerHTML = '<div class="status-message status-error">Connection test failed: ' + (j.error || 'unknown') + '</div>';
+    })
+    .catch(function (e) { status.innerHTML = '<div class="status-message status-error">Request failed: ' + e + '</div>'; })
+    .finally(function () { b.disabled = false; b.innerHTML = orig; });
+});
+
+document.addEventListener('DOMContentLoaded', function () { openTab('main'); });
+</script>
+{% endblock %}
+{% endblock %}

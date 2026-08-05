@@ -1,0 +1,30 @@
+# Workflow Configuration for Optimized Document Extraction (server-side paths)
+# End-to-end: source zip -> parse -> extract using a previously optimized prompt.
+# Mirrors the /api/run_workflow_doc_extraction_optimized endpoint when called with
+# source_zip_path and config_zip_path.
+# Run with: python run_cli.py workflow_doc_extraction_optimized path/to/this/config.yml
+
+# === INPUT FILES (server paths, not uploads) ===
+zip_file_path: "/abs/path/to/source.zip"        # zip of PDF/XML source documents
+config_zip_path: "/abs/path/to/config.zip"       # optimization_config.zip from workflow_prompt_optimization
+file_type: "PDF"  # PDF | scienceDirect | PMC
+
+# === WORKSPACE (optional) ===
+base_path: ""
+task_name: ""
+contact_email: ""
+
+# === PARSING MODE ===
+convert_mode: "byPart"  # byPart | wholeDoc
+# NOTE: input/output fields and prompts are read from config_zip_path
+# (optim_settings.json / optim_prompt.json), so they are NOT set here.
+
+# === EXTRACTION SETTINGS ===
+judging_mode: "confidence"  # confidence | score | "" (no judgement)
+threads: 6
+
+# === USAGE INSTRUCTIONS ===
+# 1. Set zip_file_path to source documents and config_zip_path to an optimized config bundle
+# 2. config_zip_path is the optimization_config.zip produced by workflow_prompt_optimization
+# 3. Set convert_mode to match how the documents should be parsed
+# 4. Run: python run_cli.py workflow_doc_extraction_optimized src/yml/workflow/workflow_doc_extraction_optimized_config.yml

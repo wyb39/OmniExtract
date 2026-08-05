@@ -1,0 +1,98 @@
+{% extends 'base.html' %}
+{% from '_macros.html' import task_cards %}
+
+{% block content %}
+<div class="page-hero">
+  <div class="hero-icon sky"><i class="fas fa-file-lines"></i></div>
+  <div>
+    <h2>Document Parsing</h2>
+    <p class="hero-desc">Convert a folder of PDF / XML documents into structured JSON files and a combined
+      <code>_dataset.json</code> used by the extraction modules.</p>
+  </div>
+</div>
+
+<form class="module-container" data-task="doc-parsing" data-result="#task-result">
+  <div class="section-container">
+    <div class="section-head"><div><div class="section-title">Task Name</div></div></div>
+    <div class="form-group">
+      <label class="form-label" for="task-name">Task Name</label>
+      <input id="task-name" name="task_name" class="form-input" placeholder="Enter a name for this task">
+      <small class="form-hint"><i class="fas fa-circle-info"></i>Provide a descriptive name for this document parsing task.</small>
+    </div>
+  </div>
+
+  <div class="section-container">
+    <div class="section-head"><div><div class="section-title">File Source Configuration</div></div></div>
+    <div class="form-group">
+      <label class="form-label" for="folder-path">Source Folder Path <span class="req-badge">Required</span></label>
+      <input id="folder-path" name="folder_path" class="form-input" placeholder="C:\path\to\your\source\files">
+      <div class="help-text-container">
+        <p class="help-text-title">Directory Structure Example:</p>
+        <pre style="background:#f8fafc;padding:10px;border-radius:6px;margin:10px 0;font-size:13px;"><code>source_directory/
+├── document1.pdf
+├── document2.pdf
+└── document3.pdf</code></pre>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-container">
+    <div class="section-head"><div><div class="section-title">Output Configuration</div></div></div>
+    <div class="form-group">
+      <label class="form-label" for="save-path">Save Path <span class="req-badge">Required</span></label>
+      <input id="save-path" name="save_path" class="form-input" placeholder="C:\path\to\save\json\files">
+      <div class="help-text-container">
+        <p class="help-text-title">Files Will Be Saved In This Structure:</p>
+        <pre style="background:#f8fafc;padding:10px;border-radius:6px;margin:10px 0;font-size:13px;"><code>output_directory/
+├── document1.json
+├── document2.json
+└── <strong>_dataset.json</strong> (all docs, used by Document Extraction)</code></pre>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-container">
+    <div class="section-head"><div><div class="section-title">File Type Configuration</div></div></div>
+    <div class="form-group">
+      <label class="form-label" for="file-type">File Type</label>
+      <select id="file-type" name="file_type" class="form-select">
+        <option value="PDF">PDF</option>
+        <option value="scienceDirect">ScienceDirect</option>
+        <option value="PMC">PMC</option>
+        <option value="Arxiv">Arxiv</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="section-container">
+    <div class="section-head"><div><div class="section-title">Conversion Mode</div></div></div>
+    <div class="form-group">
+      <label class="form-label" for="convert-mode">Conversion Mode</label>
+      <select id="convert-mode" name="convert_mode" class="form-select">
+        <option value="byPart">By Part (divide document by article parts)</option>
+        <option value="wholeDoc">Whole Document (convert entire document as one)</option>
+      </select>
+      <div class="callout callout-warn" style="margin-top:12px;">
+        <i class="fas fa-triangle-exclamation"></i>
+        <div><strong>Note:</strong> Document Parsing will <strong>NOT</strong> parse Title and Abstract (they can be obtained more accurately from websites).</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="form-actions">
+    <button type="button" class="btn btn-primary" data-submit><i class="fas fa-play"></i>Start Document Parsing</button>
+    <div id="task-result" style="width:100%;"></div>
+  </div>
+</form>
+
+<div class="module-container" style="margin-top:30px;padding:22px 28px;">
+  <div class="section-head" style="margin-bottom:6px;">
+    <div class="step-num"><i class="fas fa-clock-rotate-left" style="font-size:.8rem;"></i></div>
+    <div>
+      <div class="section-title">Recent Tasks</div>
+      <div class="section-desc">The most recent document parsing tasks. Expand a card for details, view its log, or reuse its config.</div>
+    </div>
+  </div>
+  {{ task_cards(tasks, module_key) }}
+</div>
+{% endblock %}
