@@ -26,6 +26,7 @@ from src.model.params import (
 )
 from src.utils.optimUtil import OptimSettings
 from src.utils.evalUtil import PredictionSettings
+from src.workflow import workflow_service as workflow_svc
 from .yamlParser import yaml_to_class
 from src.common.error_handling import ReportedTaskError
 
@@ -256,6 +257,154 @@ def run_build_optm_set(data):
         raise
 
 
+def _require_input_path(data, key):
+    path = data.get(key)
+    if not path:
+        raise ValueError(f"Missing required input file path: '{key}'")
+    if not os.path.isfile(path):
+        raise FileNotFoundError(f"Input file not found: {path}")
+    return path
+
+
+def _resolve_workflow_base(data):
+    """Return (workflow_id, base_path). Use data['base_path'] if provided, else create one."""
+    base_path = data.get("base_path")
+    if base_path:
+        os.makedirs(base_path, exist_ok=True)
+        workflow_id = os.path.basename(base_path.rstrip(os.sep)) or "cli_workflow"
+        return workflow_id, base_path
+    return workflow_svc.new_workspace()
+
+
+def _workflow_summary(message, workflow_id, base_path, result, artifact_keys):
+    summary = {
+        "message": message,
+        "workflow_id": workflow_id,
+        "base_path": base_path,
+        "status": result.get("status"),
+        "processing_status": result.get("processing_status"),
+        "processing_report": result.get("processing_report"),
+    }
+    for key in artifact_keys:
+        value = result.get(key)
+        if isinstance(value, str):
+            summary[key] = value
+    return summary
+
+
+def run_workflow_doc_extraction(data):
+    try:
+        logger.info(f"workflow_doc_extraction data: {data}")
+        zip_file_path = _require_input_path(data, "zip_file_path")
+        workflow_id, base_path = _resolve_workflow_base(data)
+        result = workflow_svc.run_workflow_doc_extraction(
+            task_name=data.get("task_name") or workflow_id,
+            contact_email=data.get("contact_email", ""),
+            file_type=data.get("file_type", "PDF"),
+            zip_file_path=zip_file_path,
+            convert_mode=data.get("convert_mode", "byPart"),
+            input_fields=data.get("inputFields", []),
+            output_fields=data.get("outputFields", []),
+            base_path=base_path,
+            initial_prompt=data.get("initial_prompt", ""),
+            judging_mode=data.get("judging_mode", "confidence"),
+            threads=int(data.get("threads", 6)),
+            multiple_entities=bool(data.get("multiple_entities", False)),
+        )
+        logger.info("workflow_doc_extraction completed")
+        return _workflow_summary(
+            "workflow_doc_extraction completed",
+            workflow_id, base_path, result, ["result_zip"],
+        )
+    except Exception as e:
+        logger.error(f"Exception workflow_doc_extraction error: {e}")
+        raise
+
+
+def run_workflow_table_extraction(data):
+    try:
+        logger.info(f"workflow_table_extraction data: {data}")
+        zip_file_path = _require_input_path(data, "zip_file_path")
+        workflow_id, base_path = _resolve_workflow_base(data)
+        result = workflow_svc.run_workflow_table_extraction(
+            task_name=data.get("task_name") or workflow_id,
+            contact_email=data.get("contact_email", ""),
+            file_type=data.get("file_type", "PDF"),
+            zip_file_path=zip_file_path,
+            output_fields=data.get("outputFields", []),
+            base_path=base_path,
+            classify_prompt=data.get("classify_prompt", ""),
+            extract_prompt=data.get("extract_prompt", ""),
+            threads=int(data.get("threads", 6)),
+        )
+        logger.info("workflow_table_extraction completed")
+        return _workflow_summary(
+            "workflow_table_extraction completed",
+            workflow_id, base_path, result, ["format_tables_zip"],
+        )
+    except Exception as e:
+        logger.error(f"Exception workflow_table_extraction error: {e}")
+        raise
+
+
+def run_workflow_prompt_optimization(data):
+    try:
+        logger.info(f"workflow_prompt_optimization data: {data}")
+        zip_file_path = _require_input_path(data, "zip_file_path")
+        dataset_file_path = _require_input_path(data, "dataset_file_path")
+        workflow_id, base_path = _resolve_workflow_base(data)
+        result = workflow_svc.run_workflow_prompt_optimization(
+            task_name=data.get("task_name") or workflow_id,
+            contact_email=data.get("contact_email", ""),
+            file_type=data.get("file_type", "PDF"),
+            zip_file_path=zip_file_path,
+            dataset_file_path=dataset_file_path,
+            convert_mode=data.get("convert_mode", "byPart"),
+            input_fields=data.get("inputFields", []),
+            output_fields=data.get("outputFields", []),
+            base_path=base_path,
+            initial_prompt=data.get("initial_prompt", ""),
+            demos=int(data.get("demos", 1)),
+            article_field=data.get("article_field", "article_field"),
+            multiple_entities=bool(data.get("multiple_entities", False)),
+        )
+        logger.info("workflow_prompt_optimization completed")
+        return _workflow_summary(
+            "workflow_prompt_optimization completed",
+            workflow_id, base_path, result, ["optimization_config_zip"],
+        )
+    except Exception as e:
+        logger.error(f"Exception workflow_prompt_optimization error: {e}")
+        raise
+
+
+def run_workflow_doc_extraction_optimized(data):
+    try:
+        logger.info(f"workflow_doc_extraction_optimized data: {data}")
+        zip_file_path = _require_input_path(data, "zip_file_path")
+        config_zip_path = _require_input_path(data, "config_zip_path")
+        workflow_id, base_path = _resolve_workflow_base(data)
+        result = workflow_svc.run_workflow_doc_extraction_optimized(
+            task_name=data.get("task_name") or workflow_id,
+            contact_email=data.get("contact_email", ""),
+            file_type=data.get("file_type", "PDF"),
+            zip_file_path=zip_file_path,
+            config_zip_path=config_zip_path,
+            convert_mode=data.get("convert_mode", "byPart"),
+            base_path=base_path,
+            judging_mode=data.get("judging_mode", "confidence"),
+            threads=int(data.get("threads", 6)),
+        )
+        logger.info("workflow_doc_extraction_optimized completed")
+        return _workflow_summary(
+            "workflow_doc_extraction_optimized completed",
+            workflow_id, base_path, result, ["result_zip"],
+        )
+    except Exception as e:
+        logger.error(f"Exception workflow_doc_extraction_optimized error: {e}")
+        raise
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Command line interface for acurateLLM"
@@ -312,6 +461,14 @@ def main():
             result = run_extract_table_service(data)
         elif command == "build_optm_set":
             result = run_build_optm_set(data)
+        elif command == "workflow_doc_extraction":
+            result = run_workflow_doc_extraction(data)
+        elif command == "workflow_table_extraction":
+            result = run_workflow_table_extraction(data)
+        elif command == "workflow_prompt_optimization":
+            result = run_workflow_prompt_optimization(data)
+        elif command == "workflow_doc_extraction_optimized":
+            result = run_workflow_doc_extraction_optimized(data)
         else:
             raise ValueError(f"Unknown command: {command}")
 

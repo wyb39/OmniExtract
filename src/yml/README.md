@@ -28,6 +28,10 @@ python run_cli.py <command> <config_file.yml>
 | Information Extraction with Optimized Prompts    | pred_optimized        | pred_optimized_config.yml        | Perform information extraction based on optimized settings and prompt results                                                                                                                               |
 | Table Parsing                                    | parse_table_to_tsv    | parse_table_to_tsv_config.yml    | Parse tables in Excel, Tsv, Csv and other formats into TSV format                                                                                                                                           |
 | Table Information Extraction                     | extract_table_service | extract_table_service_config.yml | Activate ReAct agent to extract table information and output results to TSV files after table parsing                                                                                                       |
+| Workflow - Document Extraction                   | workflow_doc_extraction           | workflow/workflow_doc_extraction_config.yml           | End-to-end document extraction from a server-side source zip (parse + extract)                                                                                                                              |
+| Workflow - Table Extraction                      | workflow_table_extraction         | workflow/workflow_table_extraction_config.yml         | End-to-end table extraction from a server-side source zip (parse + extract)                                                                                                                                 |
+| Workflow - Prompt Optimization                   | workflow_prompt_optimization      | workflow/workflow_prompt_optimization_config.yml      | End-to-end prompt optimization from a server-side source zip and dataset (parse + build set + optimize)                                                                                                    |
+| Workflow - Optimized Document Extraction         | workflow_doc_extraction_optimized | workflow/workflow_doc_extraction_optimized_config.yml | End-to-end extraction using a previously optimized prompt bundle (source zip + config zip)                                                                                                                  |
 
 ## Configuration File Structure
 
@@ -55,6 +59,7 @@ Provision model files under `models/opendoc` or set
 - `table/`: Configuration files for table processing tasks
 - `model/`: Configuration files for model settings
 - `file_parse/`: Configuration files for file parsing tasks
+- `workflow/`: End-to-end workflow configs that take server-side file paths (mirrors the web workflow endpoints)
 
 ## Example Workflow
 

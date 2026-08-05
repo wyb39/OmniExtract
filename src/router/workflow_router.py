@@ -10,7 +10,6 @@ import queue
 import secrets
 import shutil
 import threading
-import uuid
 import zipfile
 from datetime import datetime
 from multiprocessing import Process
@@ -22,6 +21,7 @@ from fastapi.templating import Jinja2Templates
 
 from src.common import baseUtil
 from src.workflow.workflow_service import (
+    new_workspace,
     run_workflow_doc_extraction,
     run_workflow_doc_extraction_optimized,
     run_workflow_prompt_optimization,
@@ -63,10 +63,7 @@ def _optimization_worker() -> None:
 
 
 def _new_workspace() -> tuple[str, str, str]:
-    os.makedirs(process_dir, exist_ok=True)
-    workflow_id = f"{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}_{uuid.uuid4().hex[:8]}"
-    workspace = os.path.join(process_dir, workflow_id)
-    os.makedirs(workspace, exist_ok=False)
+    workflow_id, workspace = new_workspace()
     access_token = secrets.token_urlsafe(32)
     token_hash = hashlib.sha256(access_token.encode("utf-8")).hexdigest()
     with open(os.path.join(workspace, "workflow_access.json"), "w", encoding="utf-8") as handle:
@@ -79,6 +76,38 @@ def _new_workspace() -> tuple[str, str, str]:
 def _save_upload(upload: UploadFile, destination: str) -> None:
     with open(destination, "wb") as target:
         shutil.copyfileobj(upload.file, target)
+
+
+def _resolve_input_file(
+    upload: UploadFile | None,
+    path: str | None,
+    destination: str,
+    *,
+    is_zip: bool = False,
+    file_type: str | None = None,
+    require_document: bool = False,
+) -> str:
+    """Resolve a workflow input from either an uploaded file or a server-side path.
+
+    ``upload`` takes precedence when provided; otherwise ``path`` is used in
+    place (read-only). At least one of the two must be supplied so existing UI
+    uploads keep working while scripted callers may pass a file path instead.
+    """
+    if upload is not None:
+        _save_upload(upload, destination)
+        resolved = destination
+    elif path:
+        resolved = os.path.abspath(path)
+        if not os.path.isfile(resolved):
+            raise HTTPException(status_code=400, detail=f"Input file not found: {path}")
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="No input file provided; supply either an uploaded file or a file path",
+        )
+    if is_zip:
+        _validate_zip(resolved, file_type, require_document)
+    return resolved
 
 
 def _parse_config(config: str) -> Dict[str, Any]:
@@ -223,16 +252,22 @@ def _public_status(workflow_id: str, raw: Dict[str, Any], request: Request, toke
 @router.post("/api/run_workflow_doc_extraction")
 async def run_workflow_doc_extraction_api(
     request: Request,
-    source_zip: UploadFile = File(...),
+    source_zip: UploadFile | None = File(None),
+    source_zip_path: str = Form(""),
     config: str = Form(...),
 ):
     config_data = _parse_config(config)
     _validate_input_fields(config_data)
     workflow_id, workspace, access_token = _new_workspace()
-    zip_path = os.path.join(workspace, "upload.zip")
-    _save_upload(source_zip, zip_path)
     file_type = config_data.get("fileType", "PDF")
-    _validate_zip(zip_path, file_type, require_document=True)
+    zip_path = _resolve_input_file(
+        source_zip,
+        source_zip_path or None,
+        os.path.join(workspace, "upload.zip"),
+        is_zip=True,
+        file_type=file_type,
+        require_document=True,
+    )
     _launch(
         run_workflow_doc_extraction,
         {
@@ -256,14 +291,18 @@ async def run_workflow_doc_extraction_api(
 @router.post("/api/run_workflow_table_extraction")
 async def run_workflow_table_extraction_api(
     request: Request,
-    source_zip: UploadFile = File(...),
+    source_zip: UploadFile | None = File(None),
+    source_zip_path: str = Form(""),
     config: str = Form(...),
 ):
     config_data = _parse_config(config)
     workflow_id, workspace, access_token = _new_workspace()
-    zip_path = os.path.join(workspace, "upload.zip")
-    _save_upload(source_zip, zip_path)
-    _validate_zip(zip_path)
+    zip_path = _resolve_input_file(
+        source_zip,
+        source_zip_path or None,
+        os.path.join(workspace, "upload.zip"),
+        is_zip=True,
+    )
     _launch(
         run_workflow_table_extraction,
         {
@@ -284,19 +323,29 @@ async def run_workflow_table_extraction_api(
 @router.post("/api/run_workflow_prompt_optimization")
 async def run_workflow_prompt_optimization_api(
     request: Request,
-    source_zip: UploadFile = File(...),
-    dataset_file: UploadFile = File(...),
+    source_zip: UploadFile | None = File(None),
+    source_zip_path: str = Form(""),
+    dataset_file: UploadFile | None = File(None),
+    dataset_file_path: str = Form(""),
     config: str = Form(...),
 ):
     config_data = _parse_config(config)
     _validate_input_fields(config_data)
     workflow_id, workspace, access_token = _new_workspace()
-    zip_path = os.path.join(workspace, "upload.zip")
-    dataset_path = os.path.join(workspace, "dataset.json")
-    _save_upload(source_zip, zip_path)
-    _save_upload(dataset_file, dataset_path)
     file_type = config_data.get("fileType", "PDF")
-    _validate_zip(zip_path, file_type, require_document=True)
+    zip_path = _resolve_input_file(
+        source_zip,
+        source_zip_path or None,
+        os.path.join(workspace, "upload.zip"),
+        is_zip=True,
+        file_type=file_type,
+        require_document=True,
+    )
+    dataset_path = _resolve_input_file(
+        dataset_file,
+        dataset_file_path or None,
+        os.path.join(workspace, "dataset.json"),
+    )
     start_workflow_workers()
     _optimization_queue.put(
         {
@@ -321,27 +370,37 @@ async def run_workflow_prompt_optimization_api(
 @router.post("/api/run_workflow_doc_extraction_optimized")
 async def run_workflow_doc_extraction_optimized_api(
     request: Request,
-    config_zip: UploadFile = File(...),
-    source_zip: UploadFile = File(...),
+    config_zip: UploadFile | None = File(None),
+    config_zip_path: str = Form(""),
+    source_zip: UploadFile | None = File(None),
+    source_zip_path: str = Form(""),
     config: str = Form(...),
 ):
     config_data = _parse_config(config)
     workflow_id, workspace, access_token = _new_workspace()
-    source_zip_path = os.path.join(workspace, "upload_data.zip")
-    config_zip_path = os.path.join(workspace, "upload_config.zip")
-    _save_upload(source_zip, source_zip_path)
-    _save_upload(config_zip, config_zip_path)
     file_type = config_data.get("fileType", "PDF")
-    _validate_zip(source_zip_path, file_type, require_document=True)
-    _validate_zip(config_zip_path)
+    source_zip_path_resolved = _resolve_input_file(
+        source_zip,
+        source_zip_path or None,
+        os.path.join(workspace, "upload_data.zip"),
+        is_zip=True,
+        file_type=file_type,
+        require_document=True,
+    )
+    config_zip_path_resolved = _resolve_input_file(
+        config_zip,
+        config_zip_path or None,
+        os.path.join(workspace, "upload_config.zip"),
+        is_zip=True,
+    )
     _launch(
         run_workflow_doc_extraction_optimized,
         {
             "task_name": config_data.get("taskName", workflow_id),
             "contact_email": config_data.get("contactEmail", ""),
             "file_type": file_type,
-            "zip_file_path": source_zip_path,
-            "config_zip_path": config_zip_path,
+            "zip_file_path": source_zip_path_resolved,
+            "config_zip_path": config_zip_path_resolved,
             "convert_mode": config_data.get("convertMode", "byPart"),
             "base_path": workspace,
             "judging_mode": config_data.get("judging", "confidence"),

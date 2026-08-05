@@ -1,0 +1,108 @@
+{% extends 'base.html' %}
+{% from '_macros.html' import task_cards %}
+
+{% block content %}
+
+{% if not has_main_config %}
+<div class="alert alert-danger" style="margin-top:0;margin-bottom:24px;">
+  <i class="fas fa-triangle-exclamation"></i>
+  <div>
+    <h4>No model configuration found</h4>
+    <p>Please complete the model configuration first — every module depends on it.
+      <a href="{{ url_for('page_model_config') }}" style="font-weight:700;">Go to Model Configuration <i class="fas fa-arrow-right"></i></a>
+    </p>
+  </div>
+</div>
+{% endif %}
+
+<div class="page-hero">
+  <div class="hero-icon"><i class="fas fa-layer-group"></i></div>
+  <div>
+    <h2>Welcome to OmniExtract</h2>
+    <p class="hero-desc">
+      An LLM-based automatic extraction tool built on
+      <a href="https://github.com/stanfordnlp/dspy" target="_blank" style="font-weight:600;">DSPy</a>,
+      designed for information extraction from literature and documents. It enhances extraction
+      performance through prompt optimization on curated data, and supports batch extraction of
+      multi-property entities from original documents (PDF / XML) and tabular files.
+      A video tutorial is available at
+      <a href="https://www.bilibili.com/video/BV12QywBhE1p" target="_blank" style="font-weight:600;">OmniExtract - Tutorial</a>.
+    </p>
+  </div>
+</div>
+
+<div class="card" style="padding:24px 28px;margin-bottom:24px;">
+  <div class="section-head" style="margin-bottom:6px;">
+    <div class="step-num"><i class="fas fa-route" style="font-size:.8rem;"></i></div>
+    <div>
+      <div class="section-title">How it works — a typical session</div>
+      <div class="section-desc">This is the <strong>local gui_v2</strong> server. Configure a model, parse your files, then run extraction / optimization.</div>
+    </div>
+  </div>
+  <div class="quickstart">
+    <div class="qs-step">
+      <div class="qs-num">1</div>
+      <div class="qs-title">Configure a model</div>
+      <div class="qs-desc">Connect an LLM provider in <strong>Model Configuration</strong> and test the connection.</div>
+    </div>
+    <div class="qs-step">
+      <div class="qs-num">2</div>
+      <div class="qs-title">Parse documents</div>
+      <div class="qs-desc">Turn PDF / XML into <code>_dataset.json</code> with <strong>Document Parsing</strong>.</div>
+    </div>
+    <div class="qs-step">
+      <div class="qs-num">3</div>
+      <div class="qs-title">(Optional) Optimize prompts</div>
+      <div class="qs-desc">Use <strong>Build Optimization Dataset</strong> then <strong>Prompt Optimization</strong> to tune prompts on curated data.</div>
+    </div>
+    <div class="qs-step">
+      <div class="qs-num">4</div>
+      <div class="qs-title">Extract &amp; review</div>
+      <div class="qs-desc">Run <strong>Document Extraction</strong> (original or optimized) or <strong>Table Extraction</strong>. Track progress in Recent Tasks.</div>
+    </div>
+  </div>
+</div>
+
+<div class="card" style="padding:24px 28px;">
+  <div class="section-head">
+    <div class="step-num"><i class="fas fa-grip" style="font-size:.8rem;"></i></div>
+    <div>
+      <div class="section-title">Modules</div>
+      <div class="section-desc">Each module works on <strong>local absolute paths</strong> on this server. Use ASCII paths only.</div>
+    </div>
+  </div>
+  <div class="module-grid">
+    <a class="module-card" href="{{ url_for('page_model_config') }}">
+      <div class="mc-icon" style="background:linear-gradient(135deg,#4f46e5,#0ea5e9);"><i class="fas fa-sliders"></i></div>
+      <div class="mc-title">Model Configuration</div>
+      <div class="mc-desc">Set up and test the LLM providers used by every module.</div>
+    </a>
+    <a class="module-card" href="{{ url_for('page_document_parsing') }}">
+      <div class="mc-icon" style="background:linear-gradient(135deg,#0284c7,#38bdf8);"><i class="fas fa-file-lines"></i></div>
+      <div class="mc-title">Document Parsing</div>
+      <div class="mc-desc">Convert PDF / XML documents into a structured <code>_dataset.json</code>.</div>
+    </a>
+    <a class="module-card" href="{{ url_for('page_doc_extraction') }}">
+      <div class="mc-icon" style="background:linear-gradient(135deg,#7c3aed,#a78bfa);"><i class="fas fa-wand-magic-sparkles"></i></div>
+      <div class="mc-title">Document Extraction</div>
+      <div class="mc-desc">Extract structured fields from documents — by hand-written prompt or an optimized package.</div>
+    </a>
+    <a class="module-card" href="{{ url_for('page_build_optm_dataset') }}">
+      <div class="mc-icon" style="background:linear-gradient(135deg,#059669,#34d399);"><i class="fas fa-database"></i></div>
+      <div class="mc-title">Build Optimization Dataset</div>
+      <div class="mc-desc">Pair parsed documents with curated ground truth into an optimization dataset.</div>
+    </a>
+    <a class="module-card" href="{{ url_for('page_prompt_optimization') }}">
+      <div class="mc-icon" style="background:linear-gradient(135deg,#d97706,#fbbf24);"><i class="fas fa-bolt"></i></div>
+      <div class="mc-title">Prompt Optimization</div>
+      <div class="mc-desc">Run DSPy optimization against your curated dataset to produce an optimized package.</div>
+    </a>
+    <a class="module-card" href="{{ url_for('page_table_parsing') }}">
+      <div class="mc-icon" style="background:linear-gradient(135deg,#e11d48,#fb7185);"><i class="fas fa-table"></i></div>
+      <div class="mc-title">Table Extraction</div>
+      <div class="mc-desc">Parse table files to TSV and extract structured records via a ReAct agent.</div>
+    </a>
+  </div>
+</div>
+
+{% endblock %}

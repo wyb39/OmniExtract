@@ -1,0 +1,138 @@
+{% extends 'base.html' %}
+{% from '_macros.html' import fields_editor, task_cards %}
+
+{% block content %}
+<div class="page-hero">
+  <div class="hero-icon rose"><i class="fas fa-table"></i></div>
+  <div>
+    <h2>Table Extraction</h2>
+    <p class="hero-desc">Parse table files into TSV, then extract structured records via a ReAct agent.
+      Two steps live in the tabs below.</p>
+  </div>
+</div>
+
+<div class="module-container">
+  <div class="tabs">
+    <button type="button" class="tab-button active" data-tab="table-files" data-tab-group="table-parsing">Table Files Parsing</button>
+    <button type="button" class="tab-button" data-tab="extraction" data-tab-group="table-parsing">Extraction From Tables</button>
+  </div>
+
+  {# ===== Table Files Parsing ===== #}
+  <div class="tab-pane active" data-tab-pane="table-parsing" data-tab-pane-id="table-files">
+    <form data-task="table-parsing" data-result="#tp-result">
+      <div class="section-container">
+        <div class="section-head"><div><div class="section-title">Task Name</div></div></div>
+        <div class="form-group">
+          <label class="form-label" for="tp-task-name">Task Name</label>
+          <input id="tp-task-name" name="task_name" class="form-input" placeholder="Enter a name for this task">
+        </div>
+      </div>
+      <div class="section-container">
+        <div class="section-head"><div><div class="section-title">File Source Configuration</div></div></div>
+        <div class="form-group">
+          <label class="form-label" for="tp-folder">Source Folder Path <span class="req-badge">Required</span></label>
+          <input id="tp-folder" name="file_folder_path" class="form-input" placeholder="C:\path\to\your\source\files">
+        </div>
+      </div>
+      <div class="section-container">
+        <div class="section-head"><div><div class="section-title">Output Configuration</div></div></div>
+        <div class="form-group">
+          <label class="form-label" for="tp-save">Save Path <span class="req-badge">Required</span></label>
+          <input id="tp-save" name="save_folder_path" class="form-input" placeholder="C:\path\to\save\results">
+          <div class="callout callout-info" style="margin-top:12px;">
+            <i class="fas fa-circle-info"></i>
+            <div>Results include <code>json_classify</code> and <code>json_example</code> directories, consumable by Extraction From Tables.</div>
+          </div>
+        </div>
+      </div>
+      <div class="section-container">
+        <div class="section-head"><div><div class="section-title">Non-tabular File Type Configuration</div></div></div>
+        <div class="form-group">
+          <label class="form-label" for="tp-file-type">File Type</label>
+          <select id="tp-file-type" name="non_tabular_file_format" class="form-select">
+            <option value="PDF">PDF</option>
+            <option value="scienceDirect">ScienceDirect</option>
+            <option value="PMC">PMC</option>
+            <option value="Arxiv">Arxiv</option>
+          </select>
+          <small class="form-hint">Used only when parsing tables out of non-tabular files (e.g. PDF main text). Not recommended — prefer tabular sources.</small>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-primary" data-submit><i class="fas fa-play"></i>Start Table Parsing</button>
+        <div id="tp-result" style="width:100%;"></div>
+      </div>
+    </form>
+  </div>
+
+  {# ===== Extraction From Tables ===== #}
+  <div class="tab-pane" data-tab-pane="table-parsing" data-tab-pane-id="extraction">
+    <form data-task="table-extraction" data-result="#te-result">
+      <div class="section-container">
+        <div class="section-head"><div><div class="section-title">Task Name</div></div></div>
+        <div class="form-group">
+          <label class="form-label" for="te-task-name">Task Name</label>
+          <input id="te-task-name" name="task_name" class="form-input" placeholder="Enter a name for this task">
+        </div>
+      </div>
+      <div class="section-container">
+        <div class="section-head"><div><div class="section-title">Parsed File Source Configuration</div></div></div>
+        <div class="form-group">
+          <label class="form-label" for="te-parsed">Parsed File Path <span class="req-badge">Required</span></label>
+          <input id="te-parsed" name="parsed_file_path" class="form-input" placeholder="C:\path\to\parsed\files">
+          <small class="form-hint">The Save Path from the Table Files Parsing step.</small>
+        </div>
+      </div>
+      <div class="section-container">
+        <div class="section-head"><div><div class="section-title">Output Configuration</div></div></div>
+        <div class="form-group">
+          <label class="form-label" for="te-save">Save Folder Path <span class="req-badge">Required</span></label>
+          <input id="te-save" name="save_folder_path" class="form-input" placeholder="C:\path\to\save\results">
+          <small class="form-hint" style="color:var(--danger);">Must be a new path that does not contain existing files.</small>
+        </div>
+      </div>
+      <div class="section-container">
+        <div class="section-head"><div><div class="section-title">Output Fields Configuration</div></div></div>
+        {{ fields_editor('te-output-container', 'outputFields', kind='output', add_label='Add OutputField') }}
+      </div>
+      <div class="section-container">
+        <div class="section-head"><div><div class="section-title">Prompt Configuration</div></div></div>
+        <div class="form-group">
+          <label class="form-label" for="te-classify">Classification Prompt</label>
+          <textarea id="te-classify" name="classify_prompt" class="form-textarea" style="min-height:80px;" placeholder="Please classify the table content"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="te-extract">Extraction Prompt</label>
+          <textarea id="te-extract" name="extract_prompt" class="form-textarea" style="min-height:80px;" placeholder="Please extract the data according to the specified fields"></textarea>
+        </div>
+      </div>
+      <div class="section-container">
+        <div class="section-head"><div><div class="section-title">Processing Configuration</div></div></div>
+        <div class="form-group">
+          <label class="form-label" for="te-threads">Number of Threads</label>
+          <input id="te-threads" name="num_threads" type="number" class="form-input" value="6" min="1" max="32">
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-primary" data-submit><i class="fas fa-play"></i>Start Table Extraction</button>
+        <div id="te-result" style="width:100%;"></div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="module-container" style="margin-top:30px;padding:22px 28px;">
+  <div class="section-head" style="margin-bottom:6px;">
+    <div class="step-num"><i class="fas fa-clock-rotate-left" style="font-size:.8rem;"></i></div>
+    <div><div class="section-title">Recent Table Parsing Tasks</div></div>
+  </div>
+  {{ task_cards(table_parsing_tasks, 'table-parsing') }}
+</div>
+<div class="module-container" style="margin-top:24px;padding:22px 28px;">
+  <div class="section-head" style="margin-bottom:6px;">
+    <div class="step-num"><i class="fas fa-clock-rotate-left" style="font-size:.8rem;"></i></div>
+    <div><div class="section-title">Recent Table Extraction Tasks</div></div>
+  </div>
+  {{ task_cards(table_extraction_tasks, 'table-extraction') }}
+</div>
+{% endblock %}

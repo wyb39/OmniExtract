@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}OmniExtract{% endblock %}</title>
+<link rel="icon" href="{{ url_for('static', filename='img/logo.png') }}" type="image/png">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+<link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+{% block head %}{% endblock %}
+</head>
+<body>
+<nav class="navbar">
+  <div class="nav-container">
+    <a href="{{ url_for('page_index') }}" style="text-decoration:none;color:inherit;">
+      <div class="logo-container">
+        <img src="{{ url_for('static', filename='img/logo.png') }}" class="logo" alt="OmniExtract logo">
+        <h1 class="app-title">OmniExtract</h1>
+      </div>
+    </a>
+    <div class="nav-links">
+      {% for href, label, icon in nav_items %}
+      <a class="nav-link{% if active == href %} active{% endif %}" href="{{ url_for('page_' + href.replace('-','_')) }}">
+        <i class="fas {{ icon }}"></i>{{ label }}
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+</nav>
+
+<div id="page-content" class="page-content">
+{% block content %}{% endblock %}
+</div>
+
+<!-- ===== Real-time log modal (shared) ===== -->
+<div class="modal-overlay" id="log-modal" style="display:none;">
+  <div class="modal-box modal-xl">
+    <div class="modal-header">
+      <span class="modal-title"><i class="fas fa-file-lines"></i> Real-time task log</span>
+      <button type="button" class="modal-close" onclick="OmniLog.close()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="log-modal-label" class="text-muted" style="font-size:12px;margin-bottom:8px;"></div>
+      <div id="log-modal-content" class="log-pre"></div>
+    </div>
+    <div class="modal-footer">
+      <label class="form-checkbox" style="font-size:.82rem;">
+        <input type="checkbox" id="log-autoscroll" checked> Auto-scroll
+      </label>
+      <button type="button" class="btn btn-secondary btn-sm" onclick="OmniLog.togglePoll()">
+        <i class="fas fa-pause"></i><span id="log-poll-label">Pause</span>
+      </button>
+      <button type="button" class="btn btn-primary btn-sm" onclick="OmniLog.close()">Close</button>
+    </div>
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

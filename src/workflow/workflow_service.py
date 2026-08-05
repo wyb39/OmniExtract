@@ -10,11 +10,14 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import uuid
 import zipfile
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, Iterable, List
+from typing import Any, Callable, Dict, Iterable, List, Tuple
 
 from loguru import logger
+
+from src.common import baseUtil
 
 from src.utils.evalUtil import PredictionSettings
 from src.utils.optimUtil import DspyField, OptimSettings
@@ -38,6 +41,22 @@ from src.common.error_handling import (
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def new_workspace() -> Tuple[str, str]:
+    """Create a fresh workspace directory under ``process/``.
+
+    Returns ``(workflow_id, workspace_path)``. The workspace is an empty folder
+    that workflow runs use as ``base_path`` for status files and artifacts.
+    Shared by the HTTP router (which then adds access tokens) and the CLI.
+    """
+    root_dir = os.path.abspath(baseUtil.get_root_path())
+    process_dir = os.path.join(root_dir, "process")
+    os.makedirs(process_dir, exist_ok=True)
+    workflow_id = f"{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}_{uuid.uuid4().hex[:8]}"
+    workspace = os.path.join(process_dir, workflow_id)
+    os.makedirs(workspace, exist_ok=False)
+    return workflow_id, workspace
 
 
 def _write_status(base_path: str, status: str, **details: Any) -> None:

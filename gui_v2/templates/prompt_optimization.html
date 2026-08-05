@@ -1,0 +1,106 @@
+{% extends 'base.html' %}
+{% from '_macros.html' import fields_editor, task_cards %}
+
+{% block content %}
+<div class="page-hero">
+  <div class="hero-icon amber"><i class="fas fa-bolt"></i></div>
+  <div>
+    <h2>Prompt Optimization</h2>
+    <p class="hero-desc">Run DSPy optimization against a curated dataset to produce an optimized package
+      (<code>optim_settings.json</code> + <code>optim_prompt.json</code>) for use in Document Extraction · Optimized.</p>
+  </div>
+</div>
+
+<form class="module-container" data-task="prompt-optimization" data-result="#task-result">
+  <div class="section-container">
+    <div class="section-head"><div><div class="section-title">Task Name</div></div></div>
+    <div class="form-group">
+      <label class="form-label" for="po-task-name">Task Name</label>
+      <input id="po-task-name" name="task_name" class="form-input" placeholder="Enter a name for this task">
+    </div>
+  </div>
+
+  <div class="section-container">
+    <div class="section-head"><div><div class="section-title">Data and Save Configuration</div></div></div>
+    <div class="form-group">
+      <label class="form-label" for="po-dataset-path">Dataset Path <span class="req-badge">Required</span></label>
+      <input id="po-dataset-path" name="dataset_path" class="form-input" placeholder="path/to/your/_optim_dataset.json">
+      <small class="form-hint">Recommended: the <code>_optim_dataset.json</code> from Build Optimization Dataset.</small>
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="po-save-dir">Save Directory <span class="req-badge">Required</span></label>
+      <input id="po-save-dir" name="save_dir" class="form-input" placeholder="path/to/save/results">
+      <small class="form-hint">The optimized package is written here. Use this path in Document Extraction · Optimized.</small>
+    </div>
+  </div>
+
+  <div class="section-container">
+    <div class="section-head"><div><div class="section-title">Input Fields</div></div></div>
+    {{ fields_editor('po-input-container', 'inputFields', kind='input', add_label='Add InputField') }}
+  </div>
+  <div class="section-container">
+    <div class="section-head"><div><div class="section-title">Output Fields</div></div></div>
+    {{ fields_editor('po-output-container', 'outputFields', kind='output', add_label='Add OutputField') }}
+  </div>
+
+  <div class="section-container">
+    <div class="section-head"><div><div class="section-title">Prompt Configuration</div></div></div>
+    <div class="form-group">
+      <label class="form-label" for="po-initial-prompt">Initial Prompt</label>
+      <textarea id="po-initial-prompt" name="initial_prompt" class="form-textarea" placeholder="Given the {input_text}, extract the information about {extracted_info}. Rules: 1. ... 2. ..."></textarea>
+    </div>
+  </div>
+
+  <div class="section-container">
+    <div class="section-head"><div><div class="section-title">Optimization Settings</div></div></div>
+    <div class="field-grid">
+      <div class="form-group">
+        <label class="form-label" for="po-task">Task</label>
+        <select id="po-task" name="task" class="form-select">
+          <option value="Extraction">Extraction</option>
+          <option value="QA">QA</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="po-optim-burden">Optimization Burden</label>
+        <select id="po-optim-burden" name="optim_burden" class="form-select">
+          <option value="light">Light</option>
+          <option value="medium" selected>Medium</option>
+          <option value="heavy">Heavy</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="po-threads">Threads</label>
+        <input id="po-threads" name="threads" type="number" class="form-input" value="6">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="po-demos">Demos</label>
+        <input id="po-demos" name="demos" type="number" class="form-input" value="1">
+      </div>
+    </div>
+  </div>
+
+  <div class="section-container">
+    <div class="section-head"><div><div class="section-title">Extraction Mode</div></div></div>
+    <div class="form-group">
+      <label class="form-checkbox"><input type="checkbox" name="multiple"> Set true for extracting multiple entities from the document</label>
+    </div>
+    <div class="form-group">
+      <label class="form-checkbox"><input type="checkbox" name="ai_evaluation" checked> Set true to use AI scoring instead of string matching</label>
+    </div>
+  </div>
+
+  <div class="form-actions">
+    <button type="button" class="btn btn-primary" data-submit><i class="fas fa-play"></i>Run Optimization</button>
+    <div id="task-result" style="width:100%;"></div>
+  </div>
+</form>
+
+<div class="module-container" style="margin-top:30px;padding:22px 28px;">
+  <div class="section-head" style="margin-bottom:6px;">
+    <div class="step-num"><i class="fas fa-clock-rotate-left" style="font-size:.8rem;"></i></div>
+    <div><div class="section-title">Recent Prompt Optimization Tasks</div></div>
+  </div>
+  {{ task_cards(tasks, module_key) }}
+</div>
+{% endblock %}

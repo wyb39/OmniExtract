@@ -1,0 +1,164 @@
+{% extends 'base.html' %}
+{% from '_macros.html' import fields_editor, task_cards %}
+
+{% block content %}
+<div class="page-hero">
+  <div class="hero-icon"><i class="fas fa-wand-magic-sparkles"></i></div>
+  <div>
+    <h2>Document Extraction</h2>
+    <p class="hero-desc">Extract structured information from documents. Use <strong>Original</strong> with a hand-written
+      prompt, or <strong>Optimized</strong> with an optimization package produced by Prompt Optimization.</p>
+  </div>
+</div>
+
+<div class="module-container">
+  <div class="tabs">
+    <button type="button" class="tab-button active" data-tab="original" data-tab-group="doc-extraction">Original</button>
+    <button type="button" class="tab-button" data-tab="optimized" data-tab-group="doc-extraction">Optimized</button>
+  </div>
+
+  {# ===== Original ===== #}
+  <div class="tab-pane active" data-tab-pane="doc-extraction" data-tab-pane-id="original">
+    <form data-task="original-extraction" data-result="#original-result">
+      <div class="section-container">
+        <div class="section-head"><div><div class="section-title">Task Name</div></div></div>
+        <div class="form-group">
+          <label class="form-label" for="oe-task-name">Task Name</label>
+          <input id="oe-task-name" name="task_name" class="form-input" placeholder="Enter a name for this task">
+        </div>
+      </div>
+      <div class="section-container">
+        <div class="section-head"><div><div class="section-title">Data and Save Configuration</div></div></div>
+        <div class="form-group">
+          <label class="form-label" for="oe-dataset-path">Dataset Path <span class="req-badge">Required</span></label>
+          <input id="oe-dataset-path" name="dataset_path" class="form-input" placeholder="path/to/your/_dataset.json">
+          <small class="form-hint">JSON/CSV/TSV/Excel. Recommended: the <code>_dataset.json</code> from Document Parsing.</small>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="oe-save-dir">Save Directory <span class="req-badge">Required</span></label>
+          <input id="oe-save-dir" name="save_dir" class="form-input" placeholder="path/to/save/results">
+          <small class="form-hint">A <code>result.json</code> will be written in this directory.</small>
+        </div>
+      </div>
+
+      <div class="section-container">
+        <div class="section-head"><div><div class="section-title">Input Fields</div></div></div>
+        <small class="form-hint" style="display:block;margin-bottom:12px;">Fields taken from your dataset as input, e.g. <code>Method</code>.</small>
+        {{ fields_editor('oe-input-container', 'inputFields', kind='input', add_label='Add InputField') }}
+      </div>
+      <div class="section-container">
+        <div class="section-head"><div><div class="section-title">Output Fields</div></div></div>
+        <small class="form-hint" style="display:block;margin-bottom:12px;">The properties you want the model to extract.</small>
+        {{ fields_editor('oe-output-container', 'outputFields', kind='output', add_label='Add OutputField') }}
+      </div>
+
+      <div class="section-container">
+        <div class="section-head"><div><div class="section-title">Prompt Configuration</div></div></div>
+        <div class="form-group">
+          <label class="form-label" for="oe-initial-prompt">Initial Prompt</label>
+          <textarea id="oe-initial-prompt" name="initial_prompt" class="form-textarea" placeholder="Given the {input_text}, extract the information about {extracted_info}. Rules: 1. ... 2. ..."></textarea>
+        </div>
+      </div>
+
+      <div class="section-container">
+        <div class="section-head"><div><div class="section-title">Processing Settings</div></div></div>
+        <div class="field-grid">
+          <div class="form-group">
+            <label class="form-label" for="oe-judging">Judging Mode</label>
+            <select id="oe-judging" name="judging" class="form-select">
+              <option value="">None</option>
+              <option value="confidence">Confidence</option>
+              <option value="score">Score</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="oe-threads">Threads</label>
+            <input id="oe-threads" name="threads" type="number" class="form-input" value="6">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Task</label>
+          <select name="task" class="form-select">
+            <option value="Extraction">Extraction</option>
+            <option value="QA">QA</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-checkbox"><input type="checkbox" name="multiple" checked> Set true for extracting multiple entities from the document</label>
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button type="button" class="btn btn-primary" data-submit><i class="fas fa-play"></i>Start Extraction</button>
+        <div id="original-result" style="width:100%;"></div>
+      </div>
+    </form>
+  </div>
+
+  {# ===== Optimized ===== #}
+  <div class="tab-pane" data-tab-pane="doc-extraction" data-tab-pane-id="optimized">
+    <form data-task="optimized-extraction" data-result="#optimized-result">
+      <div class="section-container">
+        <div class="section-head"><div><div class="section-title">Task Name</div></div></div>
+        <div class="form-group">
+          <label class="form-label" for="op-task-name">Task Name</label>
+          <input id="op-task-name" name="task_name" class="form-input" placeholder="Enter a name for this task">
+        </div>
+      </div>
+      <div class="section-container">
+        <div class="section-head"><div><div class="section-title">Required Paths</div></div></div>
+        <div class="form-group">
+          <label class="form-label" for="op-load-dir">Load Directory <span class="req-badge">Required</span></label>
+          <input id="op-load-dir" name="load_dir" class="form-input" placeholder="path/to/optimization/results">
+          <small class="form-hint">The <strong>Save Directory</strong> from Prompt Optimization (contains <code>optim_settings.json</code> + <code>optim_prompt.json</code>).</small>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="op-dataset-path">Dataset Path <span class="req-badge">Required</span></label>
+          <input id="op-dataset-path" name="dataset_path" class="form-input" placeholder="path/to/your/_dataset.json">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="op-save-dir">Save Directory <span class="req-badge">Required</span></label>
+          <input id="op-save-dir" name="save_dir" class="form-input" placeholder="path/to/save/results">
+        </div>
+      </div>
+      <div class="section-container">
+        <div class="section-head"><div><div class="section-title">Evaluation Settings</div></div></div>
+        <div class="form-group">
+          <label class="form-label" for="op-judging">Judging Mode</label>
+          <select id="op-judging" name="judging" class="form-select">
+            <option value="">None</option>
+            <option value="confidence">Confidence</option>
+            <option value="score">Score</option>
+          </select>
+        </div>
+      </div>
+      <div class="section-container">
+        <div class="section-head"><div><div class="section-title">Processing Settings</div></div></div>
+        <div class="form-group">
+          <label class="form-label" for="op-threads">Threads</label>
+          <input id="op-threads" name="threads" type="number" class="form-input" value="6">
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-primary" data-submit><i class="fas fa-play"></i>Start Optimized Extraction</button>
+        <div id="optimized-result" style="width:100%;"></div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="module-container" style="margin-top:30px;padding:22px 28px;">
+  <div class="section-head" style="margin-bottom:6px;">
+    <div class="step-num"><i class="fas fa-clock-rotate-left" style="font-size:.8rem;"></i></div>
+    <div><div class="section-title">Recent Original Tasks</div></div>
+  </div>
+  {{ task_cards(original_tasks, 'original-extraction') }}
+</div>
+<div class="module-container" style="margin-top:24px;padding:22px 28px;">
+  <div class="section-head" style="margin-bottom:6px;">
+    <div class="step-num"><i class="fas fa-clock-rotate-left" style="font-size:.8rem;"></i></div>
+    <div><div class="section-title">Recent Optimized Tasks</div></div>
+  </div>
+  {{ task_cards(optimized_tasks, 'optimized-extraction') }}
+</div>
+{% endblock %}
