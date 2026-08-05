@@ -168,7 +168,7 @@ field is `null` when the provider does not return enough information.
 
 The supported error codes, grouped by category, are:
 
-**Input / source issues**
+**Input / source / parsing issues**
 
 | Code | Meaning / Suggested action |
 |---|---|
