@@ -2,8 +2,9 @@ from src.utils.optimUtil import DspyField, create_output_model_class
 import pandas as pd
 from tqdm import tqdm
 from loguru import logger
+import subprocess
+import tempfile
 import re
-from pathlib import Path
 from pylatexenc.latex2text import LatexNodes2Text
 import numpy as np
 from typing import Literal
@@ -11,13 +12,12 @@ import json
 import os
 import xml.etree.ElementTree as ET
 from bs4 import BeautifulSoup
-from src.parsing.pdf_parser import convert_pdf
-from src.parsing.pdf_markdown_renderer import split_md as split_pdf_markdown
 
-# The integrated production path is intentionally fixed here.  Keep this as an
-# internal switch so the public CLI/API/YAML contracts remain unchanged.  Set
-# it to ``"opendoc"`` when a full OpenDoc run is required.
-PDF_PARSER_BACKEND = "hybrid"
+# ``main`` uses the Marker-based PDF pipeline.  Keep the backend name
+# explicit so shared adapters can select the parser without importing the
+# optional Hybrid/OpenDoc implementation from another branch.
+PDF_PARSER_BACKEND = "marker"
+MARKER_WORKS_NUM=1
 
 class TeXProcessor:
     def __init__(self, main_tex_path):
@@ -992,51 +992,206 @@ class PubMedCentralXmlParser:
 
 
 def split_md(folder_path, save_path):
-    """Split parser-produced Markdown using the canonical section schema."""
-    return split_pdf_markdown(folder_path, save_path)
+    """
+    Split markdown files in folder structure into JSON files with parsed sections.
 
+    Args:
+        folder_path (str): Path to folder containing markdown files (either in subfolders or directly in folder)
+        save_path (str): Path to save the generated JSON files
+    """
+    folder_path = os.path.abspath(os.path.normpath(folder_path))
+    save_path = os.path.abspath(os.path.normpath(save_path))
 
-def parse_article_to_md(
-    folder_path,
-    save_path,
-):
-    """Convert a folder of PDFs with the integrated layout-first parser."""
+    # Validate input paths
+    if not os.path.exists(folder_path):
+        raise ValueError(f"Folder path does not exist: {folder_path}")
+    if not os.path.isdir(folder_path):
+        raise ValueError(f"Path is not a directory: {folder_path}")
 
-    source_directory = Path(folder_path).expanduser().resolve()
-    output_directory = Path(save_path).expanduser().resolve()
-    if not source_directory.is_dir():
-        raise ValueError(f"Source path is not a directory: {source_directory}")
-    if output_directory.exists() and not output_directory.is_dir():
-        raise ValueError(f"Save path is not a directory: {output_directory}")
-    output_directory.mkdir(parents=True, exist_ok=True)
+    # Create save directory if it doesn't exist
+    if not os.path.exists(save_path):
+        os.makedirs(save_path, exist_ok=True)
+    elif not os.path.isdir(save_path):
+        raise ValueError(f"Save path is not a directory: {save_path}")
 
-    pdf_files = sorted(
-        path for path in source_directory.iterdir()
-        if path.is_file() and path.suffix.lower() == ".pdf"
+    # Get all markdown files to process
+    markdown_files = []
+
+    # Check for subdirectories first
+    subdirs = [
+        d
+        for d in os.listdir(folder_path)
+        if os.path.isdir(os.path.join(folder_path, d))
+    ]
+
+    if subdirs:
+        # Process markdown files in subdirectories (original behavior)
+        for subdir in subdirs:
+            md_filename = f"{subdir}.md"
+            md_path = os.path.join(folder_path, subdir, md_filename)
+            if os.path.exists(md_path):
+                markdown_files.append((subdir, md_path))
+    else:
+        # No subdirectories, process markdown files directly in folder
+        md_files = [f for f in os.listdir(folder_path) if f.endswith(".md")]
+        for md_file in md_files:
+            file_name = os.path.splitext(md_file)[0]
+            md_path = os.path.join(folder_path, md_file)
+            markdown_files.append((file_name, md_path))
+
+    if not markdown_files:
+        logger.warning(f"No markdown files found in {folder_path}")
+        return
+
+    processed_count = 0
+    error_count = 0
+
+    for file_name, md_path in tqdm(markdown_files, desc="Processing markdown files"):
+        try:
+            # Parse markdown file
+            md_obj = ParsedMarkdown(md_path)
+
+            # Construct output JSON file path
+            json_filename = f"{file_name}.json"
+            json_path = os.path.join(save_path, json_filename)
+
+            # Save parsed sections to JSON file with proper encoding
+            with open(json_path, "w", encoding="utf-8") as f:
+                json.dump(md_obj.sections, f, ensure_ascii=False)
+
+            processed_count += 1
+
+        except FileNotFoundError as e:
+            error_count += 1
+            logger.error(f"File not found error processing {file_name}: {e}")
+        except Exception as e:
+            error_count += 1
+            logger.error(f"Unexpected error processing {file_name}: {e}")
+
+    logger.info(
+        f"Processing complete. Successfully processed: {processed_count}, Errors: {error_count}"
     )
+
+    if error_count > 0:
+        logger.warning(f"Encountered {error_count} errors during processing")
+
+
+def parse_article_to_md(folder_path, save_path):
+    """
+    Convert PDF articles in the specified folder to Markdown format and save them.
+
+    Args:
+        folder_path (str): Source folder path containing PDF files
+        save_path (str): Target folder path for saving converted Markdown files
+
+    Returns:
+        list: Paths to the generated markdown files
+
+    Raises:
+        ValueError: If the provided folder paths are invalid
+    """
+    folder_path = os.path.abspath(os.path.normpath(folder_path))
+    save_path = os.path.abspath(os.path.normpath(save_path))
+    config = {"output_format": "markdown", "disable_multiprocessing": True}
+
+    # Validate input paths
+    if not os.path.exists(folder_path):
+        raise ValueError(f"Source folder does not exist: {folder_path}")
+    if not os.path.isdir(folder_path):
+        raise ValueError(f"Source path is not a directory: {folder_path}")
+
+    # Create save directory if it doesn't exist
+    if not os.path.exists(save_path):
+        os.makedirs(save_path, exist_ok=True)
+    elif not os.path.isdir(save_path):
+        raise ValueError(f"Save path is not a directory: {save_path}")
+
+    def _run_marker_cli_for_folder(in_folder: str, out_folder: str, cfg: dict):
+        if MARKER_WORKS_NUM == "AUTO":
+            args = [
+            "marker",
+            in_folder,
+            "--output_dir",
+            out_folder,
+            "--output_format",
+            cfg.get("output_format", "markdown"),
+        ]
+        else:
+            args = [
+                "marker",
+                in_folder,
+                "--output_dir",
+                out_folder,
+                "--workers",
+                str(MARKER_WORKS_NUM),
+                "--output_format",
+                cfg.get("output_format", "markdown"),
+            ]
+        if cfg.get("disable_multiprocessing", False):
+            args.append("--disable_multiprocessing")
+        tmp_cfg_path = None
+        if cfg:
+            tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".json")
+            tmp_cfg_path = tmp_file.name
+            tmp_file.close()
+            with open(tmp_cfg_path, "w", encoding="utf-8") as f:
+                import json as _json
+                _json.dump(cfg, f, ensure_ascii=False)
+            args.extend(["--config_json", tmp_cfg_path])
+        try:
+            _workers_val = None if str(MARKER_WORKS_NUM).strip().upper() == "AUTO" else int(MARKER_WORKS_NUM)
+        except Exception:
+            _workers_val = None
+        if _workers_val == 1:
+            logger.info(
+                "To ensure smooth execution, the worker count is set to 1. You can change MARKER_WORKS_NUM in src/articleUtil.py to increase concurrent PDF processing. If MARKER_WORKS_NUM is 'AUTO', the MARKER tool will set workers automatically."
+            )
+        logger.info(f"Running marker convert tool with {MARKER_WORKS_NUM} workers. Worker initialization may take time, please wait patiently.")
+        try:
+            completed = subprocess.run(args, stdout=None, stderr=None, text=True, check=True)
+            if completed.stdout:
+                logger.debug(completed.stdout)
+            if completed.stderr:
+                logger.debug(completed.stderr)
+        finally:
+            if tmp_cfg_path and os.path.exists(tmp_cfg_path):
+                try:
+                    os.unlink(tmp_cfg_path)
+                except Exception:
+                    pass
+
+    _run_marker_cli_for_folder(folder_path, save_path, config)
+    pdf_files = [file for file in os.listdir(folder_path) if file.endswith(".pdf")]
+
     if not pdf_files:
-        logger.warning("No PDF files found in %s", source_directory)
+        logger.warning(f"No PDF files found in {folder_path}")
         return []
 
     converted_files = []
-    for pdf_path in pdf_files:
-        output_path = output_directory / pdf_path.stem / f"{pdf_path.stem}.md"
+    error_count = 0
+
+    for file in pdf_files:
+        file_name = file.split(".")[0]
+        if not os.path.exists(os.path.join(save_path, file_name)):
+            os.mkdir(os.path.join(save_path, file_name))
         try:
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            convert_pdf(pdf_path, output_path, backend=PDF_PARSER_BACKEND)
-            result_path = output_path
-            if not result_path.is_file():
-                raise FileNotFoundError(f"Converted file not found: {result_path}")
-            converted_files.append(str(result_path))
-            logger.info("Successfully converted {} to markdown", pdf_path.name)
-        except Exception as exc:
-            logger.error("Error processing {}: {}", pdf_path.name, exc)
+            output_path = os.path.join(save_path, file_name, file_name + ".md")
+            if not os.path.exists(output_path):
+                raise FileNotFoundError(f"Converted file not found: {output_path}")
+            converted_files.append(output_path)
+            logger.info(f"Successfully converted {file} to markdown")
+        except Exception as e:
+            error_count += 1
+            logger.error(f"Error processing {file}: {e}")
+            continue
 
     logger.info(
-        "PDF processing complete. Successfully converted: {}/{}",
-        len(converted_files),
-        len(pdf_files),
+        f"Processing complete. Successfully converted: {len(converted_files)}, Errors: {error_count}"
     )
+
+    if error_count > 0:
+        logger.warning(f"Encountered {error_count} errors during processing")
+
     return converted_files
 
 

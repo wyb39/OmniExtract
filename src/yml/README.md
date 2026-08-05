@@ -44,13 +44,11 @@ Each configuration file follows a specific structure tailored to its functionali
 
 Refer to each individual configuration file template for detailed parameter explanations and examples.
 
-PDF input is handled by the integrated Hybrid/OpenDoc flow automatically; no
-additional parser fields are required in the configuration files. The default
-production backend is Hybrid. To run full OpenDoc instead, edit the internal
-`PDF_PARSER_BACKEND` constant in `src/parsing/articleUtil.py` from `"hybrid"` to
-`"opendoc"`; this deliberately is not part of the public YAML/API contract.
-Provision model files under `models/opendoc` or set
-`OMNIEXTRACT_OPENDOC_MODEL_DIR` before running.
+PDF input is handled by the Marker-based flow automatically; no additional
+parser fields are required in the configuration files. The production backend
+is Marker on main, fixed by the internal `PDF_PARSER_BACKEND` constant in
+`src/parsing/articleUtil.py`; this deliberately is not part of the public
+YAML/API contract.
 
 ## Directory Organization
 

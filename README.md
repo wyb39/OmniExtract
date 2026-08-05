@@ -28,7 +28,7 @@ You can extract multi-property entities from multiple files by following these s
 ## Quick Start
 
 ### Prerequisites
-- Python 3.10 or higher
+- Python 3.10
 - Git
 
 ### Download the code
@@ -52,24 +52,35 @@ source venv/bin/activate
 ```
 
 ### Install Dependencies
-Install the required Python packages using pip:
-```bash
-pip install -r requirements.txt
-```
-**Please note that you may need to install right torch version depending on your system.**
+Install the required Python packages using pip. It is recommended to install
+torch separately first so the version matches your system:
 
-### Start the GUI Service
-After installing dependencies, start the local GUI service:
+1. Install the torch version that matches your system. Choose the command
+   suitable for your platform from https://pytorch.org/get-started/locally/,
+   for example:
+   ```bash
+   pip install torch
+   ```
+2. Remove the `torch` dependency from `requirements.txt` (it was already
+   installed in step 1; reinstalling it would overwrite the version you chose).
+3. Install the remaining dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+**Please note that you need to install the correct torch version for your
+system, and you must install torch first before running
+`pip install -r requirements.txt`.**
+
+### Start the Web UI Service
+After installing dependencies, start the web UI service:
 ```bash
-python -m gui.app
+python src/main.py
 ```
 Make sure your virtual environment is activated.
-Then open your browser and navigate to http://127.0.0.1:8050/ to use the tool.
-
-The Jinja2 web UI is also available from the FastAPI service. Start it with
-`python src/main.py`, then open http://127.0.0.1:9000/omniextract/. It uses the
-same API handlers as the existing CLI service and serves the migrated templates
-from `ui_jinja/templates`.
+Then open your browser and navigate to http://127.0.0.1:9000/omniextract/ to
+use the tool. It uses the same API handlers as the existing CLI service and
+serves the migrated templates from `ui_jinja/templates`.
 
 The Jinja pages submit four background workflows under the same prefix:
 `run_workflow_doc_extraction`, `run_workflow_doc_extraction_optimized`,
@@ -89,14 +100,16 @@ Email notifications are optional. Configure `OMNI_EXTRACT_SMTP_SENDER` and
 `OMNI_EXTRACT_SMTP_PASSWORD` (plus the optional SMTP server variables) before
 starting the service to enable them.
 
-### Model runtime settings
+The older Dash-based GUI is still available. Start it with `python -m gui.app`
+and open http://127.0.0.1:8050/ in your browser to use the tool.
 
-The supported model providers are `openai`, `vllm`, `ollama`, `qwen`,
-`deepseek`, `gemini`, `anthropic`, `sglang`, `openrouter`, and `custom`.
-Provider prefixes are normalized, so both `gpt-4.1` and `openai/gpt-4.1`
-produce the same OpenAI model identifier. Leave Gemini `api_base` empty to use
-LiteLLM's provider URL generation. Qwen accepts either `DASHSCOPE_API_KEY` or
-`QWEN_API_KEY` when no key is stored in the model settings.
+For Linux server deployment, set a password to encrypt the model `api_key` and expose the service externally.
+The GUI already listens on `0.0.0.0` by default, so just set the encryption key and start it:
+```bash
+OMNI_EXTRACT_ENCRYPTION_KEY=YOUR_PASSWORD python -m gui.app
+```
+
+### Model runtime settings
 
 Two independent DSPy response-cache switches are available as service startup
 flags of `python src/main.py`:
@@ -112,31 +125,12 @@ or disable a provider's prompt cache. Calls served by DSPy's response cache are
 excluded from `model_calls`, `input_tokens`, and `output_tokens` in the
 processing report.
 
-Thinking/reasoning settings consist of:
-
-- `thinking_enabled`: enables explicit provider controls when supported.
-- `reasoning_effort`: `low`, `medium`, or `high`.
-- `thinking_budget_tokens`: an optional provider-specific reasoning budget.
-
-OpenAI, OpenRouter, Anthropic, Qwen, vLLM, SGLang, and compatible custom
-endpoints receive provider-specific thinking parameters. With the pinned
-LiteLLM adapter, DeepSeek, Gemini, and Ollama use the selected model's native
-thinking behavior without additional request fields. Anthropic requires a
-thinking budget of at least 1024 tokens, and `max_tokens` must be greater than
-that budget.
-
-Sampling settings are validated before an LM is created. `temperature` must be
-between 0 and 2, `top_p` and `min_p` between 0 and 1, and `top_k` and token
-limits must be positive. `top_k` is rejected for OpenAI and DeepSeek. `min_p`
-is accepted only for vLLM, Ollama, SGLang, OpenRouter, and compatible custom
-endpoints.
-
 ### Processing error reports
 
-CLI commands and the four Jinja background workflows now create
+CLI commands and the four Jinja background workflows create
 `processing_report.json` beside their result files. A failed document is
-isolated from the other documents in the same batch. Therefore, a workflow can
-finish with `processing_status: "partial"` and still return all usable results.
+isolated from the other documents in the same batch, so a workflow can finish
+with `processing_status: "partial"` and still return all usable results.
 
 The report contains the workflow result, affected documents, and aggregated
 provider-reported model token usage:
@@ -169,41 +163,71 @@ provider-reported model token usage:
 }
 ```
 
-`cached_input_tokens` records input tokens read from the provider's prompt
-cache. `cache_creation_input_tokens` records newly cached input tokens when the
-provider exposes that metric. Either cache field is `null` when the provider
-does not return enough information to calculate a complete total. DSPy local
-response-cache hits are not provider calls and are not included in these
-totals.
+The `token_usage` fields aggregate provider-reported token usage; either cache
+field is `null` when the provider does not return enough information.
 
-Detailed parser/model tracebacks remain in the application logs. Prompt
-optimization also keeps DSPy's original `optim.log`; its processing report
-only explains the main failure and the recommended correction. An optimization
-dataset must contain at least two complete, valid records.
+The supported error codes, grouped by category, are:
 
-For CLI runs, the JSON printed at completion includes `processing_report`.
-When a task-level failure occurs, the CLI prints the report path and exits with
-a non-zero status. For Jinja workflows, the status page lists affected
-documents and exposes `processing_report.json` as a downloadable artifact.
-The report is also included inside the returned result ZIP.
+**Input / source issues**
 
-The production mechanism is concentrated in three commented modules:
-`src/common/error_handling.py` defines the report contract, exception mapping
-and isolated batch executor; `src/parsing/processing_adapters.py` provides the
-single-document parsing boundary; and `src/common/token_usage.py` normalizes and
-aggregates provider usage fields. The existing service, CLI and workflow files
-only contain integration calls.
+| Code | Meaning / Suggested action |
+|---|---|
+| `SOURCE_NOT_FOUND` | Input file does not exist. Check and re-upload it. |
+| `SOURCE_INVALID` | Input file is invalid. Check the file format and encoding. |
+| `FILE_ACCESS_DENIED` | File or directory access denied. Check permissions and retry. |
+| `DOCUMENT_PARSE_FAILED` | Document could not be parsed. Check the format and re-upload. |
+| `MARKDOWN_GENERATION_FAILED` | Markdown conversion failed. Check the document or try another parser. |
+| `JSON_CONVERSION_FAILED` | JSON conversion failed. Check the generated Markdown and section structure. |
+| `TABLE_PARSE_FAILED` | Table parsing failed. Check the document/table format and retry. |
+
+**Model / provider issues**
+
+| Code | Meaning / Suggested action |
+|---|---|
+| `MODEL_TIMEOUT` (retryable) | Model request timed out. Check the model service and reduce threads. |
+| `MODEL_RATE_LIMITED` (retryable) | Rate limited. Wait and retry, or reduce the number of threads. |
+| `MODEL_UNAVAILABLE` (retryable) | Model service unavailable. Check the API base and provider status, then retry. |
+| `MODEL_AUTH_FAILED` | Authentication failed. Check the configured model credentials. |
+
+**Prediction / extraction issues**
+
+| Code | Meaning / Suggested action |
+|---|---|
+| `PREDICTION_FAILED` | Prediction failed. Check the input fields and model service, then retry. |
+| `JUDGEMENT_FAILED` | Judging failed. Check the judge model settings; the result may still be usable. |
+| `TABLE_EXTRACTION_FAILED` | Table extraction failed. Check the table prompts and model service, then retry. |
+
+**Prompt optimization issues**
+
+| Code | Meaning / Suggested action |
+|---|---|
+| `OPTIMIZATION_FAILED` | Prompt optimization failed. Check the dataset and `optim.log`, then retry. |
+| `OPTIM_DATASET_NOT_FOUND` | Optimization dataset missing. Set `dataset` to an existing JSON, CSV, TSV or XLSX file. |
+| `OPTIM_DATASET_EMPTY` | Optimization dataset is empty. Add at least two complete records. |
+| `OPTIM_DATASET_TOO_SMALL` | Optimization dataset is too small. Provide at least two complete, valid records. |
+
+**Output issues**
+
+| Code | Meaning / Suggested action |
+|---|---|
+| `OUTPUT_WRITE_FAILED` | Could not write the output. Check permissions, free space and file locks. |
+
+**Fallback**
+
+| Code | Meaning / Suggested action |
+|---|---|
+| `TASK_FAILED` | Unclassified task failure. Check the task input and application log, then retry. |
+
+`retryable: true` issues can typically be resolved by retrying. Detailed
+parser/model tracebacks remain in the application logs. For CLI runs, the JSON
+printed at completion includes `processing_report`; for Jinja workflows, the
+status page lists affected documents and exposes the report as a downloadable
+artifact, and the report is also included inside the returned result ZIP.
 
 Runtime output under `process/`, the local `error_handling_experiment/`
 workspace, and `settings/model_settings_*.json` are ignored by Git. Model
 settings may contain credentials and must be configured locally on each
 deployment.
-
-For Linux server deployment, set a password to encrypt the model `api_key` and expose the service externally.
-The GUI already listens on `0.0.0.0` by default, so just set the encryption key and start it:
-```bash
-OMNI_EXTRACT_ENCRYPTION_KEY=YOUR_PASSWORD python -m gui.app
-```
 
 ### Use the Command Line and Configuration Files
 You can start using OmniExtract through the command-line interface. Please refer to the README file in the src/yml directory for detailed configuration instructions.
@@ -211,17 +235,12 @@ You can start using OmniExtract through the command-line interface. Please refer
 
 ## Important Notice
 
-> **PDF input uses the integrated Hybrid/OpenDoc parser.**
-> Hybrid is the production default. To switch the production flow to full
-> OpenDoc, edit `PDF_PARSER_BACKEND` in `src/parsing/articleUtil.py` to `"opendoc"`.
-> This switch is intentionally internal and does not change the existing
-> CLI/API/YAML input parameters.
-<!--
-> Marker compatibility notice removed from the production documentation.
->
-> Marker remains available as an explicit backend and fallback; please ensure
-> compliance with Marker’s usage requirements and licensing terms.
-> Refer to marker’s official documentation for details:
+> **PDF input uses the Marker-based parser.**
+> Marker is the production PDF backend on main. The backend name is fixed in
+> `src/parsing/articleUtil.py` via `PDF_PARSER_BACKEND` (default `"marker"`) and
+> is intentionally internal: it does not change the existing CLI/API/YAML input
+> parameters. Please ensure compliance with Marker's usage requirements and
+> licensing terms.
+> Refer to Marker's official documentation for details:
 > https://github.com/datalab-to/marker
 > https://github.com/datalab-to/marker/blob/master/README.md
--->

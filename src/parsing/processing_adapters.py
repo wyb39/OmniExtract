@@ -12,6 +12,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import tempfile
 from pathlib import Path
 from typing import Any, Callable
@@ -100,18 +101,39 @@ def _converter(file_type: str) -> Callable[[Path, Path], Any]:
     # dependencies or model libraries.
     from src.parsing.articleUtil import (
         PDF_PARSER_BACKEND,
+        parse_article_to_md,
         PubMedCentralXmlParser,
         ScienceDirectXmlParser,
         TeXProcessor,
     )
-    from src.parsing.pdf_parser import convert_pdf
 
     if file_type == "pdf":
-        return lambda source, destination: convert_pdf(
-            source,
-            destination,
-            backend=PDF_PARSER_BACKEND,
-        )
+        if PDF_PARSER_BACKEND != "marker":
+            raise RuntimeError(
+                f"Unsupported PDF parser backend on main: {PDF_PARSER_BACKEND}"
+            )
+
+        def convert_pdf(source: Path, destination: Path) -> None:
+            """Convert one PDF through main's existing Marker batch API."""
+
+            with tempfile.TemporaryDirectory(prefix="omniextract-marker-") as work:
+                input_dir = Path(work) / "input"
+                output_dir = Path(work) / "output"
+                input_dir.mkdir()
+                staged_source = input_dir / "document.pdf"
+                shutil.copy2(source, staged_source)
+                generated = parse_article_to_md(input_dir, output_dir)
+                if not generated:
+                    raise OSError("Marker did not generate Markdown output")
+                generated_path = Path(generated[0])
+                if not generated_path.is_file():
+                    raise OSError(
+                        f"Marker output was not found: {generated_path}"
+                    )
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(generated_path, destination)
+
+        return convert_pdf
     if file_type == "pmc":
         return lambda source, destination: PubMedCentralXmlParser(
             str(source)
@@ -208,7 +230,7 @@ def documents_to_json(
                 if mode == "wholedoc":
                     payload = {"Document": markdown.read_text(encoding="utf-8")}
                 else:
-                    from src.parsing.pdf_markdown_renderer import split_markdown_file
+                    from pdf_markdown_renderer import split_markdown_file
 
                     payload = split_markdown_file(markdown)
                     if not isinstance(payload, dict):
