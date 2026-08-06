@@ -362,6 +362,9 @@ async def run_workflow_prompt_optimization_api(
             "demos": int(config_data.get("demos", 1)),
             "article_field": config_data.get("articleField", "article_field"),
             "multiple_entities": bool(config_data.get("multipleEntities", False)),
+            "optim_burden": config_data.get("optimBurden", "medium"),
+            "threads": int(config_data.get("threads", 6)),
+            "ai_evaluation": bool(config_data.get("aiEvaluation", True)),
         }
     )
     return _started_response(request, workflow_id, access_token, "Prompt optimization workflow queued")
