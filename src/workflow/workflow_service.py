@@ -325,6 +325,9 @@ def run_workflow_prompt_optimization(
     demos: int = 1,
     article_field: str = "article_field",
     multiple_entities: bool = False,
+    optim_burden: str = "medium",
+    threads: int = 6,
+    ai_evaluation: bool = True,
 ) -> Dict[str, Any]:
     def work() -> Dict[str, Any]:
         source_dir = os.path.join(base_path, "source_file")
@@ -359,8 +362,9 @@ def run_workflow_prompt_optimization(
             initial_prompt=initial_prompt,
             demos=demos,
             multiple=multiple_entities,
-            threads=6,
-            ai_evaluation=True,
+            optim_burden=optim_burden,
+            threads=threads,
+            ai_evaluation=ai_evaluation,
         )
         optimization_result = optim_custom(settings)
         processing_report = merge_report_files(

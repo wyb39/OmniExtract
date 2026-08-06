@@ -138,6 +138,54 @@
       font-size: 12px;
       color: #9ca3af;
     }
+
+    .advanced-settings {
+      margin-top: 18px;
+      border: 1px solid #e1e5e9;
+      border-radius: 8px;
+      background: #f8fafc;
+      overflow: hidden;
+    }
+    .advanced-settings-summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 14px 16px;
+      cursor: pointer;
+      list-style: none;
+      user-select: none;
+    }
+    .advanced-settings-summary::-webkit-details-marker { display: none; }
+    .advanced-settings-summary:hover { background: #f1f5f9; }
+    .advanced-settings-summary:focus-visible { outline: 2px solid #3b82f6; outline-offset: -2px; }
+    .advanced-settings-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #0f172a;
+      font-size: 0.92rem;
+      font-weight: 700;
+    }
+    .advanced-settings-title i { color: #3b82f6; font-size: 0.82rem; }
+    .advanced-settings-desc {
+      display: block;
+      margin-top: 3px;
+      color: #64748b;
+      font-size: 0.8rem;
+      line-height: 1.45;
+    }
+    .advanced-settings-chevron {
+      color: #64748b;
+      font-size: 0.75rem;
+      transition: transform 0.18s ease;
+    }
+    .advanced-settings[open] .advanced-settings-chevron { transform: rotate(180deg); }
+    .advanced-settings-body {
+      padding: 18px 16px 4px;
+      border-top: 1px solid #e1e5e9;
+      background: #fff;
+    }
   </style>
 
   <!-- Input Fields -->
@@ -290,6 +338,35 @@
       <label class="form-label" for="po-demos">Demos</label>
       <input id="po-demos" class="form-input" type="number" placeholder="1" value="1" />
     </div>
+
+    <details class="advanced-settings">
+      <summary class="advanced-settings-summary">
+        <span>
+          <span class="advanced-settings-title"><i class="fas fa-sliders"></i>Advanced Settings</span>
+          <span class="advanced-settings-desc">Optional optimization controls — leave the defaults if unsure.</span>
+        </span>
+        <i class="fas fa-chevron-down advanced-settings-chevron" aria-hidden="true"></i>
+      </summary>
+      <div class="advanced-settings-body">
+        <div class="form-group">
+          <label class="form-label" for="po-optim-burden">Optimization Burden</label>
+          <select id="po-optim-burden" class="form-select">
+            <option value="light">Light</option>
+            <option value="medium" selected>Medium</option>
+            <option value="heavy">Heavy</option>
+          </select>
+          <small class="form-hint">Optimization intensity. Light is faster; Heavy yields better results.</small>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="po-threads">Threads</label>
+          <input id="po-threads" class="form-input" type="number" min="1" value="6" />
+          <small class="form-hint">Number of parallel threads used during optimization.</small>
+        </div>
+        <div class="form-group">
+          <label class="form-checkbox"><input type="checkbox" id="po-ai-evaluation" checked /> Use AI scoring instead of string matching</label>
+        </div>
+      </div>
+    </details>
   </div>
 
   <!-- Article Configuration -->
@@ -558,6 +635,9 @@ document.addEventListener('DOMContentLoaded', function() {
       var demos = document.getElementById('po-demos').value;
       var articleField = document.getElementById('po-article-field').value.trim();
       var multipleEntities = document.getElementById('po-multiple').checked;
+      var optimBurden = document.getElementById('po-optim-burden').value;
+      var threads = document.getElementById('po-threads').value;
+      var aiEvaluation = document.getElementById('po-ai-evaluation').checked;
       
       if (!taskName) {
         alert('Please enter a Task Name.');
@@ -661,6 +741,9 @@ document.addEventListener('DOMContentLoaded', function() {
           demos: demos,
           articleField: articleField,
           multipleEntities: multipleEntities,
+          optimBurden: optimBurden,
+          threads: threads,
+          aiEvaluation: aiEvaluation,
           inputFields: inputFields,
           outputFields: outputFields
       };
@@ -730,6 +813,9 @@ document.addEventListener('DOMContentLoaded', function() {
             demos: document.getElementById('po-demos').value,
             articleField: document.getElementById('po-article-field').value,
             multipleEntities: document.getElementById('po-multiple').checked,
+            optimBurden: document.getElementById('po-optim-burden').value,
+            threads: document.getElementById('po-threads').value,
+            aiEvaluation: document.getElementById('po-ai-evaluation').checked,
             inputFields: [],
             outputFields: []
         };
@@ -808,6 +894,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 document.getElementById('po-demos').value = config.demos || '1';
                 document.getElementById('po-article-field').value = config.articleField || 'article_field';
                 document.getElementById('po-multiple').checked = config.multipleEntities !== undefined ? config.multipleEntities : true;
+                document.getElementById('po-optim-burden').value = config.optimBurden || 'medium';
+                document.getElementById('po-threads').value = config.threads || '6';
+                document.getElementById('po-ai-evaluation').checked = config.aiEvaluation !== undefined ? config.aiEvaluation : true;
 
                 // Helper to populate field
                 function populateField(container, data, type) {
