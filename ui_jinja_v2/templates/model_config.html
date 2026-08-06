@@ -225,6 +225,36 @@
     </div>
 </div>
 
+<style>
+    .trm-overlay {
+        position: fixed; inset: 0; z-index: 1000;
+        background: rgba(15, 23, 42, 0.55);
+        display: flex; align-items: center; justify-content: center;
+        animation: trm-fade .15s ease;
+    }
+    @keyframes trm-fade { from { opacity: 0; } to { opacity: 1; } }
+    .trm-dialog {
+        background: #fff; border-radius: 12px; padding: 30px 32px 24px;
+        max-width: 460px; width: calc(100% - 32px); text-align: center;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+        animation: trm-pop .18s ease;
+    }
+    @keyframes trm-pop { from { transform: scale(0.96); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    .trm-icon { font-size: 42px; line-height: 1; margin-bottom: 14px; }
+    .trm-title { font-size: 1.15rem; font-weight: 700; margin-bottom: 8px; }
+    .trm-message { color: #475569; font-size: 0.92rem; line-height: 1.55; margin-bottom: 22px; word-break: break-word; }
+</style>
+
+<!-- Test Result Modal -->
+<div id="test-result-modal" class="trm-overlay" style="display:none;" onclick="if(event.target===this)closeTestResultModal()">
+    <div class="trm-dialog" role="dialog" aria-modal="true">
+        <div class="trm-icon" id="trm-icon"></div>
+        <div class="trm-title" id="trm-title"></div>
+        <div class="trm-message" id="trm-message"></div>
+        <button class="btn btn-primary" onclick="closeTestResultModal()">OK</button>
+    </div>
+</div>
+
 <script>
     // Tab switching logic
     function openTab(usageType) {
@@ -430,15 +460,31 @@
 
             if (!response.ok) throw new Error(result.detail || 'Connection test failed');
 
-            statusDiv.textContent = `Success! Response: ${result.result}`;
-            statusDiv.className = 'status-message status-success';
+            showTestResultModal(true, 'Connection Successful', `Model "${config.model_name}" is reachable. Response: ${result.result}`);
         } catch (error) {
-            statusDiv.textContent = `Connection Test Failed: ${error.message}`;
-            statusDiv.className = 'status-message status-error';
+            showTestResultModal(false, 'Connection Failed', error.message);
         } finally {
             btn.disabled = false;
             btn.textContent = 'Test Connection';
         }
+    }
+
+    function showTestResultModal(success, title, message) {
+        var overlay = document.getElementById('test-result-modal');
+        var icon = document.getElementById('trm-icon');
+        var titleEl = document.getElementById('trm-title');
+        var msgEl = document.getElementById('trm-message');
+        icon.innerHTML = success
+            ? '<i class="fas fa-circle-check" style="color:#10b981;"></i>'
+            : '<i class="fas fa-circle-xmark" style="color:#dc2626;"></i>';
+        titleEl.textContent = title;
+        titleEl.style.color = success ? '#10b981' : '#dc2626';
+        msgEl.textContent = message;
+        overlay.style.display = 'flex';
+    }
+
+    function closeTestResultModal() {
+        document.getElementById('test-result-modal').style.display = 'none';
     }
 </script>
 {% endblock %}
