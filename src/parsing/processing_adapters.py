@@ -195,6 +195,90 @@ def documents_to_markdown(
     ], report
 
 
+def _pdf_documents_to_json(
+    root: Path,
+    files: list[Path],
+    output: Path,
+    mode: str,
+    max_workers: int,
+) -> tuple[list[str], ProcessingReport]:
+    """Batch PDF path.
+
+    Run Marker once over the whole source folder so its models load a single
+    time, then convert each generated Markdown to JSON in-process.  Per-file
+    failures stay isolated and are reported with the same stages/codes as the
+    generic pipeline (``markdown_convert`` / ``json_convert``).
+    """
+
+    from src.parsing.articleUtil import parse_article_to_md
+
+    stems = _output_stems(root, files)
+
+    # Stage 1: stage every discovered PDF into a flat temp folder and run a
+    # single Marker pass (one model load) for all of them.
+    with tempfile.TemporaryDirectory(prefix="omniextract-marker-src-") as src_temp, \
+            tempfile.TemporaryDirectory(prefix="omniextract-marker-md-") as md_temp:
+        staging = Path(src_temp)
+        for source in files:
+            shutil.copy2(source, staging / source.name)
+        generated = parse_article_to_md(str(staging), str(md_temp))
+        md_by_marker_stem = {
+            Path(path).parent.name: Path(path) for path in generated
+        }
+
+        def worker(source: Path) -> str:
+            stem = stems[source]
+            marker_stem = source.name.split(".")[0]
+            markdown = md_by_marker_stem.get(marker_stem)
+            destination = output / f"{stem}.json"
+            temporary_json = output / f".{stem}.json.tmp"
+            try:
+                if (
+                    markdown is None
+                    or not markdown.is_file()
+                    or markdown.stat().st_size == 0
+                ):
+                    raise OSError("The parser did not generate Markdown output")
+            except Exception as error:
+                raise DocumentStageError("markdown_convert", error) from error
+            try:
+                if mode == "wholedoc":
+                    payload = {"Document": markdown.read_text(encoding="utf-8")}
+                else:
+                    from pdf_markdown_renderer import split_markdown_file
+
+                    payload = split_markdown_file(markdown)
+                    if not isinstance(payload, dict):
+                        raise TypeError(
+                            "Markdown splitter must return a mapping"
+                        )
+                temporary_json.write_text(
+                    json.dumps(payload, ensure_ascii=False, indent=2),
+                    encoding="utf-8",
+                )
+                os.replace(temporary_json, destination)
+            except Exception as error:
+                raise DocumentStageError("json_convert", error) from error
+            finally:
+                temporary_json.unlink(missing_ok=True)
+            return str(destination)
+
+        outcomes, report = run_isolated(
+            files,
+            worker,
+            lambda source: _document_id(root, source),
+            stage="document_parse",
+            workflow_id=output.name or "file_to_json",
+            max_workers=max_workers,
+        )
+
+    return [
+        str(outcome.value)
+        for outcome in outcomes
+        if outcome.issue is None and outcome.value is not None
+    ], report
+
+
 def documents_to_json(
     folder_path: str | Path,
     save_path: str | Path,
@@ -211,6 +295,12 @@ def documents_to_json(
     mode = str(convert_mode).strip().lower()
     if mode not in {"bypart", "wholedoc"}:
         raise ValueError("convert_mode must be byPart or wholeDoc")
+
+    # PDFs share one Marker model load across the whole folder; all other
+    # formats use the generic per-document converter below.
+    if normalised == "pdf":
+        return _pdf_documents_to_json(root, files, output, mode, max_workers)
+
     convert = _converter(normalised)
     stems = _output_stems(root, files)
 
