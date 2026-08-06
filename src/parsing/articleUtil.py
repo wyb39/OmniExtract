@@ -1544,7 +1544,7 @@ def build_optm_set_from_article_and_extracted_information(
             if article_index not in result_dict:
                 json_path_article = os.path.join(json_path, f"{article_index}.json")
                 result_dict[article_index] = {"article_field": article_index}
-                with open(json_path_article, "r") as f:
+                with open(json_path_article, "r", encoding="utf-8") as f:
                     current_file = json.load(f)
                     for article_part in article_parts:
                         result_dict[article_index][article_part] = (
@@ -1613,7 +1613,7 @@ def build_optm_set_from_document_and_extracted_information(
             if article_index not in result_dict:
                 json_path_article = os.path.join(json_path, f"{article_index}.json")
                 result_dict[article_index] = {"article_field": article_index}
-                with open(json_path_article, "r") as f:
+                with open(json_path_article, "r", encoding="utf-8") as f:
                     current_file = json.load(f)
                     result_dict[article_index]["Document"] = (
                         current_file["Document"] if "Document" in current_file else ""
