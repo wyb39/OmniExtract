@@ -1,5 +1,6 @@
 import os
 import dspy
+import numpy as np
 import pandas as pd
 from dspy import InputField, OutputField, make_signature
 from loguru import logger
@@ -496,6 +497,8 @@ def loadCustomOptimData(optim_settings):
     except Exception as e:
         logger.error(f"Error reading file {dataset}: {e}")
         raise
+
+    df = df.replace({np.nan: None})
 
     if optim_settings.multiple:
         input_field_list = [item.name for item in optim_settings.inputFields]
