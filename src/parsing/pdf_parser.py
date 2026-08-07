@@ -2079,11 +2079,35 @@ def _token_tail_is_repetitive(token_ids: Sequence[int]) -> bool:
     return False
 
 
+_OTSL_CELL_TAGS = ("<fcel>", "<ecel>", "<lcel>", "<ucel>", "<xcel>")
+
+
+def _table_otsl_is_explosive(text: str, *, native_character_count: int) -> bool:
+    """Early explosive-output guard operating on raw OTSL during decoding.
+
+    Mirrors the thresholds of ``_table_recognition_is_suspicious`` but counts
+    OTSL row (``<nl>``) and cell tokens instead of HTML tags, so it can fire
+    mid-generation before the autoregressive run reaches max_length.
+    """
+
+    if native_character_count < 80 or not text:
+        return False
+    row_count = text.count("<nl>")
+    cell_count = sum(text.count(tag) for tag in _OTSL_CELL_TAGS)
+    excessive_text = len(text) > native_character_count * 12 + 1500
+    excessive_structure = (
+        row_count > max(120, native_character_count // 3)
+        or cell_count > max(500, native_character_count)
+    )
+    return excessive_text and excessive_structure
+
+
 def _generate_unirec_text(
     vlm_recognizer: Any,
     image: Any,
     *,
     max_length: int,
+    native_character_count: int = 0,
 ) -> tuple[str, int, str]:
     """Run UniRec generation with EOS, repetition, and length stop reporting."""
 
@@ -2124,6 +2148,8 @@ def _generate_unirec_text(
         for _ in range(vlm_recognizer.num_decoder_layers)
     ]
     stop_reason = "max_length"
+    early_explosive_check = native_character_count >= 80
+    early_check_interval = 128
     for step in range(max_length - 1):
         logits, past_key_values = vlm_recognizer.decode_step(
             generated_ids[-1],
@@ -2140,6 +2166,19 @@ def _generate_unirec_text(
             break
         if _token_tail_is_repetitive(generated_ids):
             stop_reason = "repetition"
+            break
+        if (
+            early_explosive_check
+            and early_check_interval > 0
+            and (step + 1) % early_check_interval == 0
+            and _table_otsl_is_explosive(
+                clean_special_tokens(
+                    tokenizer.decode(generated_ids, skip_special_tokens=False)
+                ),
+                native_character_count=native_character_count,
+            )
+        ):
+            stop_reason = "rejected_suspicious"
             break
     decoded = tokenizer.decode(generated_ids, skip_special_tokens=False)
     return clean_special_tokens(decoded), len(generated_ids), stop_reason
@@ -2206,17 +2245,20 @@ def _recognize_layout_tasks(
         token_count = 0
         stop_reason = "error"
         try:
+            native_character_count = int(task.get("native_character_count", 0))
             raw_text, token_count, stop_reason = _generate_unirec_text(
                 recognizer.vlm_recognizer,
                 task["image"],
                 max_length=task_max_length,
+                native_character_count=native_character_count,
             )
             text = _postprocess_unirec_text(task["raw_label"], raw_text)
-            if task["label"] == "table" and _table_recognition_is_suspicious(
-                text,
-                native_character_count=int(
-                    task.get("native_character_count", 0)
-                ),
+            if task["label"] == "table" and (
+                stop_reason == "rejected_suspicious"
+                or _table_recognition_is_suspicious(
+                    text,
+                    native_character_count=native_character_count,
+                )
             ):
                 status = "rejected_suspicious"
                 text = ""
