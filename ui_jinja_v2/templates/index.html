@@ -63,49 +63,6 @@
   </div>
 </div>
 
-<!-- Online version info -->
-<div class="card" style="padding:24px 28px;margin-bottom:24px;">
-  <div class="section-head">
-    <div class="step-num"><i class="fas fa-cloud" style="font-size:.8rem;"></i></div>
-    <div>
-      <div class="section-title">Online Version</div>
-      <div class="section-desc">This is the online test version of OmniExtract with simplified document extraction, prompt optimization and table extraction functions.</div>
-    </div>
-  </div>
-
-  <div class="callout callout-info" style="margin-bottom:14px;">
-    <i class="fas fa-circle-info"></i>
-    <div>
-      <strong>Current Model Configuration</strong>
-      <ul class="meta-list" style="margin-top:6px;">
-        <li><i class="fas fa-microchip"></i><span>Document Information Extraction &amp; Prompt Optimization: <code>deepseek-chat</code></span></li>
-        <li><i class="fas fa-microchip"></i><span>Table Information Extraction: <code>gemini-3-flash</code></span></li>
-      </ul>
-    </div>
-  </div>
-
-  {% if daily_limit is defined %}
-  <div class="callout callout-warn" style="margin-bottom:14px;">
-    <i class="fas fa-gauge-high"></i>
-    <div>
-      <strong>Daily Usage Limit</strong>
-      <p style="margin-top:4px;">
-        Due to computational resource constraints, we have set a daily limit on the number of processing tasks.<br>
-        Remaining tasks today: <strong style="color:#c2410c;">{{ remaining_tasks }}</strong> / {{ daily_limit }}<br>
-        Limit resets <strong style="color:#c2410c;">{{ reset_countdown }}</strong>
-      </p>
-    </div>
-  </div>
-  {% endif %}
-
-  <p style="color:var(--ink-700);font-size:.92rem;">
-    <i class="fas fa-arrow-up-right-from-square" style="color:var(--primary);margin-right:6px;"></i>
-    Need more customized functions or larger batches? Visit
-    <a href="https://github.com/wyb39/OmniExtract" target="_blank" style="font-weight:700;">https://github.com/wyb39/OmniExtract</a>
-    and start the local service.
-  </p>
-</div>
-
 <!-- Recommended prompt template -->
 <div class="card" style="padding:24px 28px;margin-bottom:24px;">
   <div class="section-head" style="margin-bottom:16px;">
