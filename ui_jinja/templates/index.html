@@ -21,37 +21,6 @@
   </p>
 </div>
 
-<div style="margin-bottom:30px;padding:20px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.05);border-left:4px solid #3b82f6;">
-  <h3 class="module-title" style="color:#1e40af;margin-bottom:15px;padding-bottom:8px;border-bottom:3px solid #3b82f6;">Online Version</h3>
-  <p class="intro-paragraph" style="margin-bottom:20px;line-height:1.6;font-size:16px;color:#374151;">
-    This is the online version of OmniExtract for test. It provides simplified document information extraction, prompt optimization, and table information extraction functions.
-  </p>
-  <div style="margin-bottom:20px;font-size:16px;color:#374151;">
-    <strong>Current Model Configuration:</strong>
-    <ul style="margin-top:8px;padding-left:20px;line-height:1.6;">
-      <li>Document Information Extraction & Prompt Optimization: <code style="background-color:#eff6ff;padding:2px 6px;border-radius:4px;color:#1e40af;">deepseek-chat</code></li>
-      <li>Table Information Extraction: <code style="background-color:#eff6ff;padding:2px 6px;border-radius:4px;color:#1e40af;">gemini-3-flash</code></li>
-    </ul>
-  </div>
-
-  {% if daily_limit is defined %}
-  <div style="margin-bottom:20px;padding:15px;background-color:#fff7ed;border:1px solid #ffedd5;border-radius:8px;color:#9a3412;">
-    <strong>Daily Usage Limit:</strong>
-    <p style="margin-top:8px;margin-bottom:0;line-height:1.6;font-size:15px;">
-      Due to computational resource constraints, we have set a daily limit on the number of processing tasks.
-      <br>
-      Remaining tasks today: <span style="font-weight:bold;color:#c2410c;">{{ remaining_tasks }}</span> / {{ daily_limit }}
-      <br>
-      Limit resets <span style="font-weight:bold;color:#c2410c;">{{ reset_countdown }}</span>
-    </p>
-  </div>
-  {% endif %}
-
-  <p class="intro-paragraph" style="margin-bottom:20px;line-height:1.6;font-size:16px;color:#374151;">
-    If you want to use more customized functions or process more files, please visit <a href="https://github.com/wyb39/OmniExtract" target="_blank" style="color:#2563eb;text-decoration:none;font-weight:bold;border-bottom:2px solid #2563eb;padding-bottom:2px;transition:all 0.3s ease">https://github.com/wyb39/OmniExtract</a> and start the local service.
-  </p>
-</div>
-
 <div style="margin-bottom:30px;padding:20px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.05);border-left:4px solid #8b5cf6;">
   <h3 class="module-title" style="color:#6d28d9;margin-bottom:15px;padding-bottom:8px;border-bottom:3px solid #8b5cf6;">Recommended Prompt Template</h3>
   <p style="font-size:16px;color:#374151;margin-bottom:15px;line-height:1.6;">
