@@ -490,7 +490,10 @@ def predCustomData(
                 value = getattr(result, field, None)
                 if value is None:
                     raise ValueError(f"Model response is missing output field: {field}")
-                output_dict[field] = str(value)
+                field_value = str(value)
+                if len(field_value) >= 2 and field_value[0] == field_value[-1] and field_value[0] in ('"', "'"):
+                    field_value = field_value[1:-1]
+                output_dict[field] = field_value
         return output_dict
 
     rows = [row for _, row in df.iterrows()]
