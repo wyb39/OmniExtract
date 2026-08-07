@@ -1604,7 +1604,7 @@ def build_optm_set_from_document_and_extracted_information(
     except Exception as e:
         logger.error(f"Error reading file {dataset}: {e}")
         raise
-# For non-JSON formats (csv/tsv/xlsx), pandas cannot reliably
+    # For non-JSON formats (csv/tsv/xlsx), pandas cannot reliably
     # distinguish "" from missing values, so unify them to None.
     # For JSON, keep "" as-is so empty string and null stay distinct.
     if not dataset.endswith(".json"):
