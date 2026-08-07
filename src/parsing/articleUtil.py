@@ -1375,9 +1375,14 @@ def build_optm_set_from_article_and_extracted_information(
     except Exception as e:
         logger.error(f"Error reading file {dataset}: {e}")
         raise
-    # replace "" to None
-    df = df.replace("", None)
-    df.replace({np.nan: None}, inplace=True)
+# For non-JSON formats (csv/tsv/xlsx), pandas cannot reliably
+    # distinguish "" from missing values, so unify them to None.
+    # For JSON, keep "" as-is so empty string and null stay distinct.
+    if not dataset.endswith(".json"):
+        df = df.replace("", None)
+        df.replace({np.nan: None}, inplace=True)
+    else:
+        df.replace({np.nan: None}, inplace=True)
     result_dict = dict()
     if multiple:
         output_class = create_output_model_class(fields)
@@ -1444,9 +1449,14 @@ def build_optm_set_from_document_and_extracted_information(
     except Exception as e:
         logger.error(f"Error reading file {dataset}: {e}")
         raise
-    # replace "" to None
-    df = df.replace("", None)
-    df.replace({np.nan: None}, inplace=True)
+    # For non-JSON formats (csv/tsv/xlsx), pandas cannot reliably
+    # distinguish "" from missing values, so unify them to None.
+    # For JSON, keep "" as-is so empty string and null stay distinct.
+    if not dataset.endswith(".json"):
+        df = df.replace("", None)
+        df.replace({np.nan: None}, inplace=True)
+    else:
+        df.replace({np.nan: None}, inplace=True)
     result_dict = dict()
     if multiple:
         output_class = create_output_model_class(fields)
