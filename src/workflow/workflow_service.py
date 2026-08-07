@@ -13,7 +13,7 @@ import shutil
 import uuid
 import zipfile
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, Iterable, List, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
 from loguru import logger
 
@@ -148,11 +148,14 @@ def _fields(values: Iterable[Dict[str, Any]]) -> List[DspyField]:
     return [DspyField(**_transform_field(value)) for value in values]
 
 
-def _zip_files(source_dir: str, archive_path: str) -> str:
+def _zip_files(source_dir: str, archive_path: str, include: Optional[Iterable[str]] = None) -> str:
     archive_absolute = os.path.abspath(archive_path)
+    include_set = set(include) if include is not None else None
     with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED) as archive:
         for root, _, files in os.walk(source_dir):
             for filename in files:
+                if include_set is not None and filename not in include_set:
+                    continue
                 full_path = os.path.join(root, filename)
                 if os.path.abspath(full_path) == archive_absolute:
                     continue
@@ -376,7 +379,7 @@ def run_workflow_prompt_optimization(
             os.path.join(optimized_dir, REPORT_FILENAME),
             workflow_id=os.path.basename(base_path),
         )
-        optimization_zip = _zip_files(optimized_dir, os.path.join(optimized_dir, "optimization_config.zip"))
+        optimization_zip = _zip_files(optimized_dir, os.path.join(optimized_dir, "optimization_config.zip"), include=("optim_settings.json", "optim_prompt.json"))
         return {
             "optimized_prompt_dir": optimized_dir,
             "optimization_config_zip": optimization_zip,
