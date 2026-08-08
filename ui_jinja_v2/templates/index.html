@@ -25,7 +25,7 @@
       performance through prompt optimization on curated data, and supports batch extraction of
       multi-property entities from original documents (PDF / XML) and tabular files.
       A video tutorial is available at
-      <a href="https://www.bilibili.com/video/BV12QywBhE1p" target="_blank" style="font-weight:600;">OmniExtract - Tutorial</a>.
+      <a href="https://www.bilibili.com/video/BV1pduT6nEj3" target="_blank" style="font-weight:600;">OmniExtract - Tutorial</a>.
     </p>
   </div>
 </div>
@@ -101,36 +101,28 @@ Exclude the following:
   <div class="section-head">
     <div class="step-num"><i class="fas fa-box-open" style="font-size:.8rem;"></i></div>
     <div>
-      <div class="section-title">Test Data Download</div>
-      <div class="section-desc">Sample files you can use to try each module immediately.</div>
+      <div class="section-title">Example Packages</div>
+      <div class="section-desc">Each package bundles the config file, the test data, and a README for a complete example. Download a package, unzip it, and follow its README to try the corresponding module.</div>
     </div>
   </div>
 
   <div class="download-group">
-    <div class="sub-head"><i class="fas fa-file-lines"></i>Extraction from document</div>
+    <div class="sub-head"><i class="fas fa-file-lines"></i>Document Extraction</div>
     <div class="download-item">
       <div class="dl-icon"><i class="fas fa-file-pdf"></i></div>
       <div class="dl-body">
-        <div class="dl-name">Dog Breed PDF Files</div>
-        <div class="dl-desc">A collection of 5 PDF documents about dog breeds for test. Use these for <strong>Document Extraction</strong>.</div>
+        <div class="dl-name">doc_extraction_original_example.zip</div>
+        <div class="dl-desc">Runs <strong>Document Extraction - Original</strong> on AKC breed standard PDFs. Includes the config, the test PDFs, and the README.</div>
       </div>
-      <a class="dl-btn" href="/omniextract/api/download/doc_extraction/dog_breed_files_4_test.zip"><i class="fas fa-download"></i>.zip</a>
+      <a class="dl-btn" href="/omniextract/api/download/doc_extraction_original_example.zip"><i class="fas fa-download"></i>.zip</a>
     </div>
     <div class="download-item">
-      <div class="dl-icon green"><i class="fas fa-file-code"></i></div>
+      <div class="dl-icon"><i class="fas fa-file-pdf"></i></div>
       <div class="dl-body">
-        <div class="dl-name">dog_breed_curation_original.json</div>
-        <div class="dl-desc">Use <strong>Load Config</strong> in <strong>Document Extraction - Original</strong> to fill the form with this file.</div>
+        <div class="dl-name">doc_extraction_optimized_example.zip</div>
+        <div class="dl-desc">Runs <strong>Document Extraction Optimized</strong> on AKC breed standard PDFs. Includes the config, the optimization package, the test PDFs, and the README.</div>
       </div>
-      <a class="dl-btn" href="/omniextract/api/download/doc_extraction/dog_breed_curation_original.json"><i class="fas fa-download"></i>.json</a>
-    </div>
-    <div class="download-item">
-      <div class="dl-icon green"><i class="fas fa-file-code"></i></div>
-      <div class="dl-body">
-        <div class="dl-name">dog_breed_curation_optimized.json</div>
-        <div class="dl-desc">Use <strong>Load Config</strong> in <strong>Document Extraction Optimized</strong> to fill the form with this file.</div>
-      </div>
-      <a class="dl-btn" href="/omniextract/api/download/doc_extraction/dog_breed_curation_optimized.json"><i class="fas fa-download"></i>.json</a>
+      <a class="dl-btn" href="/omniextract/api/download/doc_extraction_optimized_example.zip"><i class="fas fa-download"></i>.zip</a>
     </div>
   </div>
 
@@ -139,26 +131,10 @@ Exclude the following:
     <div class="download-item">
       <div class="dl-icon"><i class="fas fa-file-pdf"></i></div>
       <div class="dl-body">
-        <div class="dl-name">curated_breed_files.zip</div>
-        <div class="dl-desc">A collection of PDF documents with corresponding curated data. Use these for <strong>Prompt Optimization</strong>.</div>
+        <div class="dl-name">prompt_optimization_example.zip</div>
+        <div class="dl-desc">Optimizes the extraction prompt from curated AKC dog-breed data. Includes the config, the curated dataset, the PDF files, and the README.</div>
       </div>
-      <a class="dl-btn" href="/omniextract/api/download/prompt_optimization/curated_breed_files.zip"><i class="fas fa-download"></i>.zip</a>
-    </div>
-    <div class="download-item">
-      <div class="dl-icon green"><i class="fas fa-file-code"></i></div>
-      <div class="dl-body">
-        <div class="dl-name">dataset.json</div>
-        <div class="dl-desc">The curated dataset file required for the <strong>Prompt Optimization</strong> module.</div>
-      </div>
-      <a class="dl-btn" href="/omniextract/api/download/prompt_optimization/dataset.json"><i class="fas fa-download"></i>.json</a>
-    </div>
-    <div class="download-item">
-      <div class="dl-icon green"><i class="fas fa-file-code"></i></div>
-      <div class="dl-body">
-        <div class="dl-name">prompt_optimization_config.json</div>
-        <div class="dl-desc">Use <strong>Load Config</strong> in the <strong>Prompt Optimization</strong> module to fill the form with this file.</div>
-      </div>
-      <a class="dl-btn" href="/omniextract/api/download/prompt_optimization/prompt_optimization_config.json"><i class="fas fa-download"></i>.json</a>
+      <a class="dl-btn" href="/omniextract/api/download/prompt_optimization_example.zip"><i class="fas fa-download"></i>.zip</a>
     </div>
   </div>
 
@@ -167,18 +143,10 @@ Exclude the following:
     <div class="download-item">
       <div class="dl-icon"><i class="fas fa-file-excel"></i></div>
       <div class="dl-body">
-        <div class="dl-name">ewas_tables_for_test.zip</div>
-        <div class="dl-desc">A collection of Excel/CSV files containing tables for test. Use these for <strong>Table Extraction</strong>.</div>
+        <div class="dl-name">table_extraction_example.zip</div>
+        <div class="dl-desc">Extracts methylation probe data from EWAS supplemental tables. Includes the config, the test tables, and the README.</div>
       </div>
-      <a class="dl-btn" href="/omniextract/api/download/table_extraction/ewas_tables_for_test.zip"><i class="fas fa-download"></i>.zip</a>
-    </div>
-    <div class="download-item">
-      <div class="dl-icon green"><i class="fas fa-file-code"></i></div>
-      <div class="dl-body">
-        <div class="dl-name">table_extraction_config.json</div>
-        <div class="dl-desc">Use <strong>Load Config</strong> in the <strong>Table Extraction</strong> module to fill the form with this file.</div>
-      </div>
-      <a class="dl-btn" href="/omniextract/api/download/table_extraction/table_extraction_config.json"><i class="fas fa-download"></i>.json</a>
+      <a class="dl-btn" href="/omniextract/api/download/table_extraction_example.zip"><i class="fas fa-download"></i>.zip</a>
     </div>
   </div>
 </div>
