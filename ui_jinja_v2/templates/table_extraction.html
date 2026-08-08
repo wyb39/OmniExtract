@@ -71,7 +71,7 @@
         <div class="file-upload-box">
           <i class="fas fa-cloud-upload-alt file-upload-icon"></i>
           <p class="file-upload-text">Click to upload or drag and drop</p>
-          <p class="file-upload-hint">ZIP file only (Max 30 files, types: csv, tsv, xls, xlsx, pdf, xml)</p>
+          <p class="file-upload-hint">ZIP file only (types: csv, tsv, xls, xlsx, pdf, xml)</p>
           <div id="file-name-display" style="display:none; margin-top: 10px; font-weight: 600; color: #334155;"></div>
         </div>
       </div>
@@ -224,9 +224,6 @@ document.getElementById('source-zip').addEventListener('change', function(event)
     }
     if (invalidFiles.length > 0) {
         errors.push("Contains invalid files (" + invalidFiles.length + "): " + invalidFiles.slice(0, 3).join(", ") + (invalidFiles.length > 3 ? "..." : ""));
-    }
-    if (fileCount > 30) {
-        errors.push("Too many files (" + fileCount + "). Max allowed is 30.");
     }
 
     if (errors.length === 0) {
