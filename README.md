@@ -244,3 +244,9 @@ You can start using OmniExtract through the command-line interface. Please refer
 > Refer to Marker's official documentation for details:
 > https://github.com/datalab-to/marker
 > https://github.com/datalab-to/marker/blob/master/README.md
+>
+> There is an **experimental `opendoc-hybrid` branch** that uses a hybrid
+> parsing pipeline based on [OpenDoc](https://github.com/opendatalab/OpenDoc)
+> and PDFium (PDFium for page rendering and native character geometry, OpenDoc
+> for layout and selective recognition). Switch to that branch to try it:
+> `git checkout opendoc-hybrid`.

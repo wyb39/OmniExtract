@@ -230,3 +230,8 @@ CLI 命令和四个 Jinja 后台工作流会创建 `processing_report.json`。�
 > 详细信息请参阅 Marker 的官方文档：
 > https://github.com/datalab-to/marker
 > https://github.com/datalab-to/marker/blob/master/README.md
+>
+> 另外还有一个**实验性的 `opendoc-hybrid` 分支**，它使用基于
+> [OpenDoc](https://github.com/opendatalab/OpenDoc) 和 PDFium 的混合解析流程
+> （PDFium 负责页面渲染和原生字符几何，OpenDoc 负责版面布局与选择性识别）。
+> 如需试用，请切换到该分支：`git checkout opendoc-hybrid`。
