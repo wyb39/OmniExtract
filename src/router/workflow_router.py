@@ -468,13 +468,17 @@ def workflow_artifact(request: Request, workflow_id: str, artifact_path: str, to
     return FileResponse(path=candidate, filename=os.path.basename(candidate))
 
 
-@router.get("/api/download/{module}/{filename}")
-async def download_file(module: str, filename: str):
-    allowed_modules = {"doc_extraction", "prompt_optimization", "table_extraction"}
-    if module not in allowed_modules or os.path.basename(filename) != filename:
+@router.get("/api/download/{filename}")
+async def download_file(filename: str):
+    allowed_files = {
+        "doc_extraction_original_example.zip",
+        "doc_extraction_optimized_example.zip",
+        "prompt_optimization_example.zip",
+        "table_extraction_example.zip",
+    }
+    if filename not in allowed_files or os.path.basename(filename) != filename:
         raise HTTPException(status_code=400, detail="Invalid download path")
-    file_path = os.path.abspath(os.path.join(root_dir, "upload_data", module, filename))
-    upload_root = os.path.abspath(os.path.join(root_dir, "upload_data", module))
-    if os.path.commonpath([upload_root, file_path]) != upload_root or not os.path.isfile(file_path):
+    file_path = os.path.abspath(os.path.join(root_dir, "examples", filename))
+    if not os.path.isfile(file_path):
         raise HTTPException(status_code=404, detail="File not found")
     return FileResponse(path=file_path, filename=filename)

@@ -17,7 +17,7 @@
     OmniExtract is an LLM-based automatic extraction tool based on 
     <a href="https://github.com/stanfordnlp/dspy" target="_blank" style="color:#2563eb;text-decoration:none;font-weight:600;transition:all 0.3s ease">DSPy</a>,
     specifically designed for information extraction tasks from literature and documents. It utilizes prompt optimization engineering to enhance extraction performance based on curated data, and provides various file format parsing tools, supporting batch extraction of multi-property entities from original documents (in formats such as PDF or XML) and tabular files. A video tutorial about OmniExtract is available at 
-    <a href="https://www.bilibili.com/video/BV12QywBhE1p" target="_blank" style="color:#2563eb;text-decoration:none;font-weight:600;transition:all 0.3s ease">OmniExtract - Tutorial</a>.
+    <a href="https://www.bilibili.com/video/BV1pduT6nEj3" target="_blank" style="color:#2563eb;text-decoration:none;font-weight:600;transition:all 0.3s ease">OmniExtract - Tutorial</a>.
   </p>
 </div>
 
@@ -52,82 +52,49 @@ Exclude the following:
 </div>
 
 <div style="margin-bottom:30px;padding:20px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.05);border-left:4px solid #10b981;">
-  <h3 class="module-title" style="color:#065f46;margin-bottom:15px;padding-bottom:8px;border-bottom:3px solid #10b981;">Test Data Download</h3>
-  
-  <h4 style="color:#1e40af;margin-bottom:12px;font-weight:600;">Extraction from document</h4>
+  <h3 class="module-title" style="color:#065f46;margin-bottom:15px;padding-bottom:8px;border-bottom:3px solid #10b981;">Example Packages</h3>
+  <p style="font-size:16px;color:#374151;margin-bottom:15px;line-height:1.6;">
+    Each package bundles the config file, the test data, and a README for a complete example. Download a package, unzip it, and follow its README to try the corresponding module.
+  </p>
+
+  <h4 style="color:#1e40af;margin-bottom:12px;font-weight:600;">Document Extraction</h4>
 
   <div style="margin-bottom: 15px;">
     <p style="font-size:16px;color:#374151;margin-bottom:10px;">
-      <strong>Dog Breed PDF Files:</strong> A collection of 5 PDF documents about dog breeds for test. Use these for <strong>Document Extraction</strong>.
-      <a href="/omniextract/api/download/doc_extraction/dog_breed_files_4_test.zip" style="margin-left:10px; background-color:#3b82f6; color:white; padding:4px 10px; border-radius:4px; text-decoration:none; font-size:14px; font-weight:600; display: inline-block;">
+      <strong>Original prompt:</strong> Runs <strong>Document Extraction - Original</strong> on AKC breed standard PDFs. Includes the config, the test PDFs, and the README.
+      <a href="/omniextract/api/download/doc_extraction_original_example.zip" style="margin-left:10px; background-color:#3b82f6; color:white; padding:4px 10px; border-radius:4px; text-decoration:none; font-size:14px; font-weight:600; display: inline-block;">
         <i class="fas fa-download" style="margin-right:5px;"></i>Download (.zip)
-      </a>
-    </p>
-  </div>
-
-  <div style="margin-bottom: 15px;">
-    <p style="font-size:16px;color:#374151;margin-bottom:10px;">
-      <strong>dog_breed_curation_original.json:</strong> This JSON file can be used to <strong>load config</strong> in <strong>Document Extraction - Original</strong>.
-      <a href="/omniextract/api/download/doc_extraction/dog_breed_curation_original.json" style="margin-left:10px; background-color:#10b981; color:white; padding:4px 10px; border-radius:4px; text-decoration:none; font-size:14px; font-weight:600; display: inline-block;">
-        <i class="fas fa-download" style="margin-right:5px;"></i>Download (.json)
       </a>
     </p>
   </div>
 
   <div style="margin-bottom: 25px;">
     <p style="font-size:16px;color:#374151;margin-bottom:10px;">
-      <strong>dog_breed_curation_optimized.json:</strong> This JSON file can be used to <strong>load config</strong> in <strong>Document Extraction Optimized</strong>.
-      <a href="/omniextract/api/download/doc_extraction/dog_breed_curation_optimized.json" style="margin-left:10px; background-color:#10b981; color:white; padding:4px 10px; border-radius:4px; text-decoration:none; font-size:14px; font-weight:600; display: inline-block;">
-        <i class="fas fa-download" style="margin-right:5px;"></i>Download (.json)
+      <strong>Optimized prompt:</strong> Runs <strong>Document Extraction Optimized</strong> on AKC breed standard PDFs. Includes the config, the optimization package, the test PDFs, and the README.
+      <a href="/omniextract/api/download/doc_extraction_optimized_example.zip" style="margin-left:10px; background-color:#3b82f6; color:white; padding:4px 10px; border-radius:4px; text-decoration:none; font-size:14px; font-weight:600; display: inline-block;">
+        <i class="fas fa-download" style="margin-right:5px;"></i>Download (.zip)
       </a>
     </p>
   </div>
 
   <h4 style="color:#1e40af;margin-bottom:12px;font-weight:600;">Prompt Optimization</h4>
 
-  <div style="margin-bottom: 15px;">
-    <p style="font-size:16px;color:#374151;margin-bottom:10px;">
-      <strong>curated_breed_files.zip:</strong> A collection of PDF documents with corresponding curated data. Use these for <strong>Prompt Optimization</strong>.
-      <a href="/omniextract/api/download/prompt_optimization/curated_breed_files.zip" style="margin-left:10px; background-color:#3b82f6; color:white; padding:4px 10px; border-radius:4px; text-decoration:none; font-size:14px; font-weight:600; display: inline-block;">
-        <i class="fas fa-download" style="margin-right:5px;"></i>Download (.zip)
-      </a>
-    </p>
-  </div>
-
-  <div style="margin-bottom: 15px;">
-    <p style="font-size:16px;color:#374151;margin-bottom:10px;">
-      <strong>dataset.json:</strong> The curated dataset file required for the <strong>Prompt Optimization</strong> module.
-      <a href="/omniextract/api/download/prompt_optimization/dataset.json" style="margin-left:10px; background-color:#10b981; color:white; padding:4px 10px; border-radius:4px; text-decoration:none; font-size:14px; font-weight:600; display: inline-block;">
-        <i class="fas fa-download" style="margin-right:5px;"></i>Download (.json)
-      </a>
-    </p>
-  </div>
-
   <div style="margin-bottom: 25px;">
     <p style="font-size:16px;color:#374151;margin-bottom:10px;">
-      <strong>prompt_optimization_config.json:</strong> This JSON file can be used to <strong>load config</strong> in the <strong>Prompt Optimization</strong> module.
-      <a href="/omniextract/api/download/prompt_optimization/prompt_optimization_config.json" style="margin-left:10px; background-color:#10b981; color:white; padding:4px 10px; border-radius:4px; text-decoration:none; font-size:14px; font-weight:600; display: inline-block;">
-        <i class="fas fa-download" style="margin-right:5px;"></i>Download (.json)
+      <strong>Breed prompt optimization:</strong> Optimizes the extraction prompt from curated AKC dog-breed data. Includes the config, the curated dataset, the PDF files, and the README.
+      <a href="/omniextract/api/download/prompt_optimization_example.zip" style="margin-left:10px; background-color:#3b82f6; color:white; padding:4px 10px; border-radius:4px; text-decoration:none; font-size:14px; font-weight:600; display: inline-block;">
+        <i class="fas fa-download" style="margin-right:5px;"></i>Download (.zip)
       </a>
     </p>
   </div>
 
   <h4 style="color:#1e40af;margin-bottom:12px;font-weight:600;">Table Extraction</h4>
 
-  <div style="margin-bottom: 15px;">
-    <p style="font-size:16px;color:#374151;margin-bottom:10px;">
-      <strong>ewas_tables_for_test.zip:</strong> A collection of Excel/CSV files containing tables for test. Use these for <strong>Table Extraction</strong>.
-      <a href="/omniextract/api/download/table_extraction/ewas_tables_for_test.zip" style="margin-left:10px; background-color:#3b82f6; color:white; padding:4px 10px; border-radius:4px; text-decoration:none; font-size:14px; font-weight:600; display: inline-block;">
-        <i class="fas fa-download" style="margin-right:5px;"></i>Download (.zip)
-      </a>
-    </p>
-  </div>
-
   <div>
     <p style="font-size:16px;color:#374151;margin-bottom:10px;">
-      <strong>table_extraction_config.json:</strong> This JSON file can be used to <strong>load config</strong> in the <strong>Table Extraction</strong> module.
-      <a href="/omniextract/api/download/table_extraction/table_extraction_config.json" style="margin-left:10px; background-color:#10b981; color:white; padding:4px 10px; border-radius:4px; text-decoration:none; font-size:14px; font-weight:600; display: inline-block;">
-        <i class="fas fa-download" style="margin-right:5px;"></i>Download (.json)
+      <strong>EWAS table curation:</strong> Extracts methylation probe data from EWAS supplemental tables. Includes the config, the test tables, and the README.
+      <a href="/omniextract/api/download/table_extraction_example.zip" style="margin-left:10px; background-color:#3b82f6; color:white; padding:4px 10px; border-radius:4px; text-decoration:none; font-size:14px; font-weight:600; display: inline-block;">
+        <i class="fas fa-download" style="margin-right:5px;"></i>Download (.zip)
       </a>
     </p>
   </div>
